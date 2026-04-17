@@ -913,6 +913,9 @@ const STOCKS = [
   {ticker:"TPSE", name:"TPS Eastern Africa", sector:"Commercial", price:16.70, yield:3.0, cons:3, payout:28, pe:14.0},
   {ticker:"UCHM", name:"Uchumi Supermarkets", sector:"Commercial", price:1.91, yield:0.0, cons:0, payout:0, pe:0.0},
   {ticker:"SCAN", name:"WPP Scangroup", sector:"Commercial", price:2.35, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"CARB", name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:5.8, cons:4, payout:40, pe:8.0},
+  {ticker:"LONG", name:"Longhorn Publishers", sector:"Commercial", price:2.30, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"KUKZ", name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.5, cons:6, payout:35, pe:10.5},
 
   // CONSTRUCTION AND ALLIED
   {ticker:"ARM",  name:"Athi River Mining", sector:"Construction", price:5.55, yield:0.0, cons:0, payout:0, pe:0.0},
@@ -942,6 +945,10 @@ const STOCKS = [
   {ticker:"OCH",  name:"Olympia Capital", sector:"Investment", price:7.88, yield:3.0, cons:3, payout:30, pe:8.0},
   {ticker:"TCL",  name:"Trans-Century", sector:"Investment", price:0.71, yield:2.0, cons:2, payout:20, pe:11.0},
   {ticker:"NSE",  name:"Nairobi Securities Exchange", sector:"Investment", price:20.40, yield:5.0, cons:4, payout:48, pe:10.5},
+  {ticker:"ILAM", name:"ILAM Fahari I-REIT", sector:"Real Estate", price:6.20, yield:8.0, cons:3, payout:90, pe:12.0},
+  {ticker:"LHL",  name:"Liberty Kenya Holdings", sector:"Insurance", price:5.40, yield:0.0, cons:2, payout:0, pe:7.0},
+  {ticker:"OCH",  name:"Olympia Capital", sector:"Investment", price:3.10, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"TCL",  name:"Trans-Century Plc", sector:"Investment", price:0.55, yield:0.0, cons:0, payout:0, pe:0.0},
 
   // MANUFACTURING AND ALLIED
   {ticker:"BOC",  name:"B.O.C. Kenya", sector:"Manufacturing", price:133.75, yield:5.0, cons:6, payout:45, pe:9.5},
@@ -1617,63 +1624,51 @@ async function fetchLivePrices() {
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
   statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Scraping NSE prices…';
-  tsEl.textContent = '';
+  statusEl.textContent = 'Merging all NSE data sources…';
 
   let prices = {};
-  let sourceUsed = '';
+  const now = new Date();
 
-  // ── PHASE 1: Full Coverage Merge ────
+  // Try each proxy to ensure connection
   for (const proxyFn of CORS_PROXIES) {
     try {
-      // 1. Get official data first
+      // 1. Scrape Official NSE (Primary source)
       const official = await scrapeOfficialNSE(proxyFn);
       Object.assign(prices, official);
-      
-      // 2. Immediately supplement with Kwayisi to fill gaps
-      const backup = await scrapeKwayisi(proxyFn);
-      // Only add from backup if the ticker is still missing
-      for (const t in backup) {
-        if (!prices[t]) prices[t] = backup[t];
-      }
-      
-      if (Object.keys(prices).length > 10) {
-        sourceUsed = 'Official + Mirror Merge';
-        break; 
-      }
-    } catch(e) { console.warn('Source failed, trying next proxy...'); }
-  }
+      console.log(`Fetched ${Object.keys(official).length} from Official NSE`);
 
-  // ── PHASE 2: Fill missing tickers individually ────────────────────
-  const missing = STOCKS.map(s => s.ticker).filter(t => !prices[t]);
-  if (missing.length > 0 && missing.length <= 10) {
-    statusEl.textContent = `Filling ${missing.length} missing prices…`;
-    for (const ticker of missing) {
-      for (const proxyFn of CORS_PROXIES) {
-        try {
-          const r = await scrapeAfricanMarketsIndividual(proxyFn, ticker);
-          if (r) { prices[ticker] = r; break; }
-        } catch(e) {}
-        try {
-          const r = await scrapeMystocks(proxyFn, ticker);
-          if (r) { prices[ticker] = r; break; }
-        } catch(e) {}
+      // 2. Scrape Kwayisi (Fills gaps for illiquid stocks)
+      const kwayisi = await scrapeKwayisi(proxyFn);
+      for (const t in kwayisi) {
+        if (!prices[t]) prices[t] = kwayisi[t]; // Only add if missing
       }
+      console.log(`Total after Kwayisi: ${Object.keys(prices).length}`);
+
+      // 3. Scrape African Financials (Final safety net)
+      const african = await scrapeAfricanFinancials(proxyFn);
+      for (const t in african) {
+        if (!prices[t]) prices[t] = african[t]; // Only add if still missing
+      }
+      console.log(`Total after African Financials: ${Object.keys(prices).length}`);
+
+      // If we have a significant number of stocks, we can stop trying proxies
+      if (Object.keys(prices).length > 20) break; 
+    } catch (e) {
+      console.warn('Proxy/Source failed, trying next...', e);
     }
   }
 
-  // ── PHASE 3: Apply results ────────────────────────────────────────
-  const now = new Date();
+  // Apply results to the STOCKS array
   let updated = 0;
   for (const [ticker, info] of Object.entries(prices)) {
-    if (info && info.price && !isNaN(info.price) && info.price > 0) {
+    if (info && info.price > 0) {
       livePrices[ticker] = { ...info, fetchedAt: now };
       const stock = STOCKS.find(s => s.ticker === ticker);
       if (stock) {
         stock.price = info.price;
-        // Recalculate yield from live dividend data
+        // Update live yield calculation
         const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
-        if (divEntry && stock.price > 0) {
+        if (divEntry) {
           stock.yield = parseFloat(((divEntry.amount / stock.price) * 100).toFixed(1));
         }
         updated++;
@@ -1681,38 +1676,16 @@ async function fetchLivePrices() {
     }
   }
 
-  if (updated === 0) {
-    // ── PHASE 4: Last resort — allorigins fetch of kwayisi JSON-like endpoint
-    try {
-      statusEl.textContent = 'Trying fallback source…';
-      const url = 'https://afx.kwayisi.org/nse/';
-      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(15000) });
-      const html = await res.text();
-      // brute-force: find any "TICKER price" pattern in raw HTML
-      const pattern = /\b([A-Z]{2,5})\b[\s\S]{0,80}?(\d{1,5}\.\d{2})/g;
-      let m;
-      while ((m = pattern.exec(html)) !== null) {
-        const ticker = m[1], price = parseFloat(m[2]);
-        if (STOCKS.find(s => s.ticker === ticker) && price > 0 && !livePrices[ticker]) {
-          livePrices[ticker] = { price, change: 0, changePct: 0, fetchedAt: now };
-          const stock = STOCKS.find(s => s.ticker === ticker);
-          if (stock) { stock.price = price; updated++; }
-        }
-      }
-    } catch(e) {}
-  }
-
   if (updated > 0) {
     statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices live`;
-    tsEl.textContent = `· ${sourceUsed || 'multi-source'} · ${now.toLocaleTimeString('en-KE', { timeZone:'Africa/Nairobi' })} EAT`;
+    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices merged & live`;
+    tsEl.textContent = `· Multi-Source · ${now.toLocaleTimeString('en-KE')} EAT`;
     renderTable(); renderWatchlist(); renderPortfolio();
-    toast(`✓ ${updated} live NSE prices loaded`);
+    toast(`✓ Data merged from 3 sources: ${updated} stocks updated`);
   } else {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ Could not reach NSE sources. Check internet & try again.';
-    tsEl.textContent = '';
-    toast('Live fetch failed — static prices shown');
+    statusEl.textContent = '⚠ All sources failed. Check internet.';
+    toast('Live fetch failed');
   }
 
   isFetching = false;
