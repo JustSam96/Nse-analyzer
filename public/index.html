@@ -1495,42 +1495,41 @@ async function scrapeKwayisi(proxyFn) {
 
 async function scrapeOfficialNSE(proxyFn) {
   const url = 'https://www.nse.co.ke/market-statistics/';
-  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error('Official NSE HTTP ' + res.status);
-  
-  const html = await res.text();
-  const prices = {};
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-  
-  let row;
-  while ((row = rowRe.exec(html)) !== null) {
-    const cells = [];
-    let cell;
-    const cellIter = new RegExp(cellRe.source, 'gi');
-    while ((cell = cellIter.exec(row[1])) !== null) {
-      cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
-    }
+  try {
+    const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return {};
+    const html = await res.text();
+    const prices = {};
+    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let row;
+    while ((row = rowRe.exec(html)) !== null) {
+      const cells = [];
+      let cell;
+      const ci = new RegExp(cellRe.source, 'gi');
+      while ((cell = ci.exec(row[1])) !== null) {
+        cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
+      }
+      if (cells.length >= 4) {
+        const rawName = cells[0].toUpperCase();
+        const price = parseFloat(cells[3].replace(/,/g, ''));
+        const change = parseFloat((cells[4] || '0').replace(/,/g, ''));
+        
+        // FUZZY MATCH: Connects "Safaricom Plc" to your ticker "SCOM"
+        const stock = STOCKS.find(s => 
+          rawName.includes(s.ticker) || 
+          rawName.includes(s.name.toUpperCase().split(' ')[0])
+        );
 
-    if (cells.length >= 4) {
-      const rawName = cells[0].toUpperCase();
-      const price = parseFloat(cells[3].replace(/,/g, ''));
-      const change = parseFloat((cells[4] || '0').replace(/,/g, ''));
-
-      const stock = STOCKS.find(s => {
-        const ticker = s.ticker.toUpperCase();
-        const shortName = s.name.toUpperCase().split(' ')[0];
-        return rawName.includes(ticker) || rawName.includes(shortName);
-      });
-
-      if (stock && !isNaN(price) && price > 0) {
-        const prev = price - change;
-        const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
-        prices[stock.ticker] = { price, change, changePct };
+        if (stock && !isNaN(price) && price > 0) {
+          const prev = price - change;
+          const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
+          prices[stock.ticker] = { price, change, changePct };
+        }
       }
     }
-  }
-  return prices;
+    return prices;
+  } catch(e) { return {}; }
 }
 
 // 1. Corrected African Financials Scraper
@@ -1622,15 +1621,16 @@ async function fetchLivePrices() {
       const official = await scrapeOfficialNSE(proxyFn);
       Object.assign(prices, official);
       
-      // Step B: Kwayisi (fill gaps)
+      // Step B: Kwayisi (Fill gaps for stocks that didn't trade)
       const kwayisi = await scrapeKwayisi(proxyFn);
       for (let t in kwayisi) { if (!prices[t]) prices[t] = kwayisi[t]; }
 
-      // Step C: African Financials (fill remaining)
+      // Step C: African Financials (Final check)
       const af = await scrapeAfricanFinancials(proxyFn);
       for (let t in af) { if (!prices[t]) prices[t] = af[t]; }
 
-      if (Object.keys(prices).length > 30) break; 
+      // ONLY break if we actually have almost all 70 stocks
+      if (Object.keys(prices).length >= STOCKS.length - 2) break; 
     } catch (e) { console.warn('Proxy link failed, trying next...'); }
   }
 
