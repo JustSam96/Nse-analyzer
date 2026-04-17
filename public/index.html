@@ -1480,6 +1480,44 @@ async function scrapeKwayisi(proxyFn) {
   return prices;
 }
 
+// Scrapes the official Nairobi Securities Exchange website
+async function scrapeOfficialNSE(proxyFn) {
+  const url = 'https://www.nse.co.ke/market-statistics/';
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error('Official NSE HTTP ' + res.status);
+  
+  const html = await res.text();
+  const prices = {};
+  
+  // Targets the standard table row structure of the official NSE Market Statistics page
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  
+  let row;
+  while ((row = rowRe.exec(html)) !== null) {
+    const cells = [];
+    let cell;
+    const cellIter = new RegExp(cellRe.source, 'gi');
+    while ((cell = cellIter.exec(row[1])) !== null) {
+      cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
+    }
+
+    // Official NSE table mapping: 1 is usually the Ticker, 2 is Price, 3 is Change
+    if (cells.length >= 3) {
+      const ticker = cells[1].toUpperCase().trim();
+      const price = parseFloat(cells[2].replace(/,/g, ''));
+      const change = parseFloat((cells[3] || '0').replace(/,/g, ''));
+
+      if (STOCKS.find(s => s.ticker === ticker) && !isNaN(price) && price > 0) {
+        const prev = price - change;
+        const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
+        prices[ticker] = { price, change, changePct };
+      }
+    }
+  }
+  return prices;
+}
+
 // africanfinancials.com — alternative NSE price table
 async function scrapeAfricanFinancials(proxyFn) {
   const url = 'https://africanfinancials.com/nairobi-securities-exchange-kenya-share-prices/';
@@ -1574,27 +1612,31 @@ async function fetchLivePrices() {
   let prices = {};
   let sourceUsed = '';
 
-  // ── PHASE 1: Try bulk sources (kwayisi then africanfinancials) ────
+  // ── PHASE 1: Try Official and Bulk sources ────
   for (const proxyFn of CORS_PROXIES) {
-    if (Object.keys(prices).length >= STOCKS.length * 0.6) break; // 60%+ found
+    // Priority 1: Official NSE Website
     try {
-      statusEl.textContent = 'Trying afx.kwayisi.org…';
-      const result = await scrapeKwayisi(proxyFn);
-      if (Object.keys(result).length > 3) {
-        Object.assign(prices, result);
-        sourceUsed = 'afx.kwayisi.org';
-        break;
+      statusEl.textContent = 'Fetching Official NSE.co.ke data…';
+      const officialResult = await scrapeOfficialNSE(proxyFn);
+      if (Object.keys(officialResult).length > 5) {
+        Object.assign(prices, officialResult);
+        sourceUsed = 'Official NSE Website';
+        break; 
       }
-    } catch(e) { /* try next */ }
-    try {
-      statusEl.textContent = 'Trying africanfinancials.com…';
-      const result = await scrapeAfricanFinancials(proxyFn);
-      if (Object.keys(result).length > 3) {
-        Object.assign(prices, result);
-        sourceUsed = 'africanfinancials.com';
-        break;
-      }
-    } catch(e) { /* try next */ }
+    } catch(e) { console.warn('Official NSE scrape failed, trying mirror...'); }
+
+    // Priority 2: Kwayisi Mirror (if official is blocked or down)
+    if (Object.keys(prices).length < 5) {
+      try {
+        statusEl.textContent = 'Trying afx.kwayisi.org…';
+        const result = await scrapeKwayisi(proxyFn);
+        if (Object.keys(result).length > 3) {
+          Object.assign(prices, result);
+          sourceUsed = 'afx.kwayisi.org';
+          break;
+        }
+      } catch(e) { /* try next proxy */ }
+    }
   }
 
   // ── PHASE 2: Fill missing tickers individually ────────────────────
