@@ -1451,115 +1451,57 @@ function switchTabById(name){
 }
 
 // ════════════════════════════════════════════════════════════════
-// LIVE PRICE FETCHING — Multi-source, no API keys required
-// Sources tried in order: Yahoo Finance (most reliable) →
-//   allorigins proxy of kwayisi → codetabs proxy of kwayisi →
-//   corsproxy.io of kwayisi → individual ticker fallback
+// LIVE PRICE FETCHING — Claude API + web_search
+// Works from any browser with internet. No CORS issues.
+// Batches tickers in groups so the request stays within token limits.
 // ════════════════════════════════════════════════════════════════
 
-// Yahoo Finance suffixes for NSE Kenya stocks
-const YF_SUFFIX = '.NR'; // e.g. SCOM.NR
+async function claudePriceBatch(tickers) {
+  // Ask Claude to web-search and return a JSON object of prices
+  const tickerList = tickers.join(', ');
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      system: `You are a financial data assistant for the Nairobi Securities Exchange (NSE), Kenya.
+Search for the latest NSE stock prices and return ONLY a raw JSON object — no markdown, no code fences, no explanation, nothing else before or after the JSON.
 
-// Fetch a single ticker from Yahoo Finance v8 API (no key needed, CORS-friendly via proxy)
-async function fetchYahooPrice(ticker) {
-  const sym = ticker + YF_SUFFIX;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
-  // Use allorigins as CORS bridge
-  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
-  const meta = json?.chart?.result?.[0]?.meta;
-  if (!meta) throw new Error('No meta');
-  const price = meta.regularMarketPrice || meta.previousClose;
-  const prev  = meta.chartPreviousClose || meta.previousClose;
-  if (!price || price <= 0) throw new Error('Bad price');
-  const change    = parseFloat((price - prev).toFixed(2));
-  const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
-  return { price, change, changePct };
+Required format:
+{
+  "TICKER": { "price": 12.34, "change": 0.50, "changePct": 1.23 },
+  ...
 }
 
-// Batch Yahoo Finance — fetch all tickers in parallel, cap concurrency
-async function batchYahoo(tickers, onProgress) {
-  const results = {};
-  const CONCURRENCY = 5;
-  for (let i = 0; i < tickers.length; i += CONCURRENCY) {
-    const chunk = tickers.slice(i, i + CONCURRENCY);
-    await Promise.allSettled(chunk.map(async t => {
-      try {
-        results[t] = await fetchYahooPrice(t);
-      } catch(e) { /* will be filled by fallback */ }
-    }));
-    if (onProgress) onProgress(Math.min(i + CONCURRENCY, tickers.length), tickers.length);
+- Search afx.kwayisi.org/nse or african-markets.com or investing.com for current NSE Kenya prices.
+- Prices must be in KES (Kenyan Shillings).
+- If a ticker price is genuinely unavailable, omit it (do not include null values).
+- Return ONLY the JSON object. No text before or after it.`,
+      messages: [{
+        role: 'user',
+        content: `Search for current NSE Kenya stock prices for these tickers and return the JSON: ${tickerList}. Today is ${new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })}.`
+      }]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(`API error ${response.status}: ${err?.error?.message || response.statusText}`);
   }
-  return results;
-}
 
-// Kwayisi scraper — tries 3 different CORS proxies
-const KWAYISI_PROXIES = [
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-];
-
-async function scrapeKwayisi() {
-  const url = 'https://afx.kwayisi.org/nse/';
-  let html = null;
-  for (const px of KWAYISI_PROXIES) {
-    try {
-      const res = await fetch(px(url), { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text.length > 5000) { html = text; break; }
-    } catch(e) { continue; }
+  const data = await response.json();
+  let rawText = '';
+  for (const block of data.content) {
+    if (block.type === 'text') rawText += block.text;
   }
-  if (!html) return {};
+  rawText = rawText.replace(/```json|```/g, '').trim();
 
-  const prices = {};
-  // kwayisi rows: <tr><td>SCOM</td><td>30.20</td><td>+0.90</td>...
-  // Use a loose pattern that handles nested tags inside cells
-  const rowRe = /<tr[\s\S]*?<\/tr>/gi;
-  const stripTags = s => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g,' ').trim();
-  const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-
-  for (const rowMatch of html.matchAll(/<tr[\s\S]*?<\/tr>/gi)) {
-    const row = rowMatch[0];
-    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => stripTags(m[1]));
-    if (cells.length < 2) continue;
-    const ticker = cells[0].toUpperCase().replace(/[^A-Z0-9]/g,'');
-    const stock = STOCKS.find(s => s.ticker === ticker);
-    if (!stock) continue;
-    const price = parseFloat(cells[1].replace(/,/g,''));
-    if (isNaN(price) || price <= 0) continue;
-    const change    = parseFloat((cells[2]||'0').replace(/,/g,'')) || 0;
-    const prev      = price - change;
-    const changePct = prev > 0 ? parseFloat(((change/prev)*100).toFixed(2)) : 0;
-    prices[ticker]  = { price, change, changePct };
-  }
-  return prices;
-}
-
-// Individual ticker page on kwayisi as last resort
-async function scrapeKwayisiTicker(ticker) {
-  const url = `https://afx.kwayisi.org/nse/${ticker.toLowerCase()}.html`;
-  for (const px of KWAYISI_PROXIES) {
-    try {
-      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const html = await res.text();
-      // Look for "Current Price" or the big number on the page
-      const m = html.match(/(\d{1,6}(?:[.,]\d{1,4})?)\s*(?:KES|<)/i)
-             || html.match(/class="[^"]*price[^"]*"[^>]*>\s*([\d.,]+)/i);
-      if (!m) continue;
-      const price = parseFloat(m[1].replace(/,/g,''));
-      if (isNaN(price) || price <= 0) continue;
-      const chgM = html.match(/([+-]\d+(?:\.\d+)?)\s*\(([+-]?[\d.]+)%\)/);
-      const change    = chgM ? parseFloat(chgM[1]) : 0;
-      const changePct = chgM ? parseFloat(chgM[2]) : 0;
-      return { price, change, changePct };
-    } catch(e) { continue; }
-  }
-  return null;
+  // Extract the first {...} block
+  const match = rawText.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON object in response');
+  return JSON.parse(match[0]);
 }
 
 // ── MAIN ORCHESTRATOR ─────────────────────────────────────────────
@@ -1575,53 +1517,43 @@ async function fetchLivePrices() {
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
   statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Connecting to Yahoo Finance…';
+  statusEl.textContent = 'Searching NSE prices via Claude…';
   tsEl.textContent = '';
 
   const allTickers = STOCKS.map(s => s.ticker);
-  let prices = {};
-  let source = '';
+  const prices = {};
 
-  // ── STEP 1: Yahoo Finance (most reliable, no scraping issues) ────
+  // Batch into groups of 25 to keep requests fast and within token limits
+  const BATCH = 25;
   try {
-    statusEl.textContent = 'Fetching from Yahoo Finance…';
-    const yf = await batchYahoo(allTickers, (done, total) => {
-      statusEl.textContent = `Yahoo Finance: ${done}/${total} stocks…`;
-    });
-    const found = Object.keys(yf).length;
-    if (found > 0) { Object.assign(prices, yf); source = 'Yahoo Finance'; }
-  } catch(e) { console.warn('Yahoo batch failed:', e); }
-
-  // ── STEP 2: Kwayisi bulk scrape to fill remaining gaps ───────────
-  const missing = allTickers.filter(t => !prices[t]);
-  if (missing.length > 0) {
-    try {
-      statusEl.textContent = `kwayisi.org — filling ${missing.length} gaps…`;
-      const kw = await scrapeKwayisi();
-      for (const t of missing) { if (kw[t]) prices[t] = kw[t]; }
-      if (Object.keys(kw).length > 0) source = source ? source + ' + kwayisi' : 'kwayisi.org';
-    } catch(e) { console.warn('Kwayisi bulk failed:', e); }
-  }
-
-  // ── STEP 3: Individual kwayisi pages for stubborn stragglers ─────
-  const still = allTickers.filter(t => !prices[t]);
-  if (still.length > 0 && still.length <= 8) {
-    statusEl.textContent = `Fetching ${still.length} stragglers individually…`;
-    for (const t of still) {
-      const r = await scrapeKwayisiTicker(t);
-      if (r) { prices[t] = r; }
+    for (let i = 0; i < allTickers.length; i += BATCH) {
+      const chunk = allTickers.slice(i, i + BATCH);
+      statusEl.textContent = `Fetching prices ${i + 1}–${Math.min(i + BATCH, allTickers.length)} of ${allTickers.length}…`;
+      try {
+        const result = await claudePriceBatch(chunk);
+        Object.assign(prices, result);
+      } catch(e) {
+        console.warn(`Batch ${i}–${i+BATCH} failed:`, e.message);
+      }
     }
+  } catch(e) {
+    console.error('Price fetch error:', e);
   }
 
   // ── APPLY RESULTS ─────────────────────────────────────────────────
   const now = new Date();
   let updated = 0;
   for (const [ticker, info] of Object.entries(prices)) {
-    if (!info || !info.price || info.price <= 0) continue;
-    livePrices[ticker] = { ...info, fetchedAt: now };
+    if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
+    livePrices[ticker] = {
+      price: parseFloat(info.price),
+      change: parseFloat(info.change ?? 0),
+      changePct: parseFloat(info.changePct ?? 0),
+      fetchedAt: now
+    };
     const stock = STOCKS.find(s => s.ticker === ticker);
     if (stock) {
-      stock.price = info.price;
+      stock.price = parseFloat(info.price);
       const div = DIVIDENDS.find(d => d.ticker === ticker);
       if (div && stock.price > 0)
         stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
@@ -1631,13 +1563,13 @@ async function fetchLivePrices() {
 
   if (updated > 0) {
     statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated}/${STOCKS.length} live`;
-    tsEl.textContent = `· ${source} · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
+    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices updated`;
+    tsEl.textContent = `· NSE live data · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
     renderTable(); renderWatchlist(); renderPortfolio();
     toast(`✓ ${updated} stock prices updated`);
   } else {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ All price sources unreachable. Check your connection.';
+    statusEl.textContent = '⚠ Could not fetch prices. Check your internet connection.';
     toast('Live fetch failed — static prices shown');
   }
 
@@ -1785,37 +1717,14 @@ function renderProjector() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// MARKET NEWS — Direct RSS scraping, no API needed
-// Sources: Business Daily, Capital FM, Nation/NMG, Standard, NSE
+// MARKET NEWS — Claude API + web_search
+// Searches live web for current NSE Kenya news. No CORS issues.
 // ════════════════════════════════════════════════════════════════
-
-const NEWS_FEEDS = [
-  { name:'Business Daily', url:'https://www.businessdailyafrica.com/feed' },
-  { name:'Capital FM',     url:'https://www.capitalfm.co.ke/business/feed/' },
-  { name:'The Standard',   url:'https://www.standardmedia.co.ke/rss/business.php' },
-  { name:'Nation Africa',  url:'https://nation.africa/kenya/business/rss.xml' },
-  { name:'Investing.com NSE', url:'https://www.investing.com/rss/news_25.rss' },
-];
-
-const NSE_KEYWORDS = [
-  'NSE','Nairobi Securities','KCB','Safaricom','SCOM','Equity Bank','EQTY',
-  'Co-operative Bank','COOP','Standard Chartered','SCBK','EABL','BAT Kenya',
-  'KenGen','KEGN','Kenya Power','KPLC','Bamburi','BAMB','Nation Media','NMG',
-  'Jubilee','JUB','Britam','BRIT','Stanbic','SBIC','TotalEnergies','TOTL',
-  'Sasini','SASN','dividend','earnings','profit','revenue','IPO','rights issue',
-  'NASI','NSE 20','CBK','interest rate','inflation','Kenya shilling','KES',
-  'listed companies','market cap','stock exchange','shares','shareholders'
-];
-
-function scoreNewsRelevance(text) {
-  const t = text.toUpperCase();
-  return NSE_KEYWORDS.reduce((n, kw) => n + (t.includes(kw.toUpperCase()) ? 1 : 0), 0);
-}
 
 function detectSentiment(text) {
   const t = text.toLowerCase();
-  const pos = ['profit','gain','rise','surge','jump','growth','dividend','record','beat','strong','rally','up','increase','exceed'];
-  const neg = ['loss','fall','drop','decline','plunge','cut','reduce','miss','weak','down','decrease','below','concern','risk'];
+  const pos = ['profit','gain','rise','surge','jump','growth','dividend','record','beat','strong','rally','up','increase','exceed','approve','win','award'];
+  const neg = ['loss','fall','drop','decline','plunge','cut','reduce','miss','weak','down','decrease','below','concern','risk','suspend','warn','debt'];
   const ps = pos.reduce((n,w) => n + (t.includes(w)?1:0), 0);
   const ns = neg.reduce((n,w) => n + (t.includes(w)?1:0), 0);
   return ps > ns ? 'positive' : ns > ps ? 'negative' : 'neutral';
@@ -1825,56 +1734,7 @@ function extractTickers(text) {
   return STOCKS.map(s => s.ticker).filter(t => {
     const re = new RegExp('\\b' + t + '\\b', 'i');
     return re.test(text) || text.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]);
-  });
-}
-
-async function fetchRSSFeed(feed) {
-  for (const px of [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  ]) {
-    try {
-      const res = await fetch(px(feed.url), { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) continue;
-      const xml = await res.text();
-      if (xml.length < 200 || !xml.includes('<item')) continue;
-
-      const items = [...xml.matchAll(/<item[\s\S]*?<\/item>/gi)].map(m => m[0]);
-      const parsed = items.map(item => {
-        const get = tag => {
-          const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, 'i'))
-                 || item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-          return m ? m[1].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#\d+;/g,'').trim() : '';
-        };
-        const title   = get('title');
-        const desc    = get('description') || get('summary');
-        const pubDate = get('pubDate') || get('dc:date') || '';
-        const link    = get('link');
-        const combined = title + ' ' + desc;
-        const score = scoreNewsRelevance(combined);
-        if (!title || score < 1) return null;
-        // Format date
-        let date = '';
-        try {
-          const d = new Date(pubDate);
-          if (!isNaN(d)) date = d.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'});
-        } catch(e) {}
-        return {
-          headline: title,
-          summary: desc.length > 220 ? desc.slice(0,220)+'…' : desc,
-          source: feed.name,
-          date,
-          link,
-          tickers: extractTickers(combined),
-          sentiment: detectSentiment(combined),
-          score,
-        };
-      }).filter(Boolean);
-      return parsed;
-    } catch(e) { continue; }
-  }
-  return [];
+  }).slice(0, 4);
 }
 
 let newsFetching = false;
@@ -1882,64 +1742,107 @@ async function fetchMarketNews() {
   if (newsFetching) return;
   newsFetching = true;
 
-  const btn     = document.getElementById('news-refresh-btn');
-  const icon    = document.getElementById('news-refresh-icon');
-  const statusEl= document.getElementById('news-status');
-  const gridEl  = document.getElementById('news-grid');
-  const emptyEl = document.getElementById('news-empty');
+  const btn      = document.getElementById('news-refresh-btn');
+  const icon     = document.getElementById('news-refresh-icon');
+  const statusEl = document.getElementById('news-status');
+  const gridEl   = document.getElementById('news-grid');
+  const emptyEl  = document.getElementById('news-empty');
 
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--gold)';
-  statusEl.textContent = 'Scanning news feeds…';
+  statusEl.textContent = 'Searching for latest NSE Kenya news…';
   emptyEl.style.display = 'none';
   gridEl.innerHTML = '';
 
   try {
-    let allItems = [];
-    // Fetch all feeds in parallel
-    const results = await Promise.allSettled(NEWS_FEEDS.map(f => fetchRSSFeed(f)));
-    results.forEach(r => { if (r.status === 'fulfilled') allItems.push(...r.value); });
+    const today = new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day:'numeric', month:'long', year:'numeric' });
 
-    if (allItems.length === 0) throw new Error('No articles retrieved from any feed');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 3000,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        system: `You are a financial news assistant specialising in the Nairobi Securities Exchange (NSE), Kenya.
 
-    // Deduplicate by headline similarity, sort by relevance then recency
-    const seen = new Set();
-    allItems = allItems.filter(item => {
-      const key = item.headline.slice(0,40).toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+Search for the latest NSE Kenya stock market news, corporate announcements, earnings results, dividend declarations, regulatory news, and Kenyan economic data that affects investors.
+
+Return ONLY a raw JSON array — no markdown, no code fences, no explanation, no text before or after the array.
+
+Required format:
+[
+  {
+    "headline": "Full news headline",
+    "summary": "2-3 sentence plain-English summary of the story and why it matters to NSE investors",
+    "source": "Publication name (e.g. Business Daily, Nation, Standard, Reuters)",
+    "date": "e.g. 17 Apr 2026",
+    "tickers": ["SCOM","KCB"],
+    "sentiment": "positive"
+  }
+]
+
+Rules:
+- Return 8–12 news items, most recent first
+- sentiment must be exactly one of: positive, negative, neutral
+- tickers must only include tickers from NSE Kenya (e.g. SCOM, KCB, EQTY, COOP, BAT, EABL, etc.)
+- If no relevant tickers, use an empty array []
+- Search businessdailyafrica.com, nation.africa, standardmedia.co.ke, reuters.com for Kenya/NSE content
+- Return ONLY the JSON array. Nothing else.`,
+        messages: [{
+          role: 'user',
+          content: `Search for the latest NSE Kenya stock market and financial news. Today is ${today}. Find earnings reports, dividend announcements, NSE index moves, regulatory changes, and macroeconomic news affecting Kenyan stocks. Return raw JSON array only.`
+        }]
+      })
     });
-    allItems.sort((a,b) => b.score - a.score || (b.date > a.date ? 1 : -1));
 
-    const top = allItems.slice(0, 12);
-    if (top.length === 0) throw new Error('No relevant NSE news found');
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(`API ${response.status}: ${errData?.error?.message || response.statusText}`);
+    }
 
-    gridEl.innerHTML = top.map(item => {
-      const sentClass = item.sentiment==='positive'?'news-pos':item.sentiment==='negative'?'news-neg':'news-neu';
-      const sentLabel = item.sentiment==='positive'?'▲ Positive':item.sentiment==='negative'?'▼ Negative':'● Neutral';
-      const tags = item.tickers.slice(0,4).map(t=>`<span class="news-ticker-tag" onclick="showDetail('${t}')" style="cursor:pointer;">${t}</span>`).join('');
-      const linkHtml = item.link ? `<a href="${item.link}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);font-family:var(--mono);text-decoration:none;margin-top:6px;display:inline-block;">Read full article ↗</a>` : '';
+    const data = await response.json();
+    let rawText = '';
+    for (const block of data.content) {
+      if (block.type === 'text') rawText += block.text;
+    }
+    rawText = rawText.replace(/```json|```/g, '').trim();
+
+    // Extract the JSON array
+    const arrMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!arrMatch) throw new Error('No JSON array in response');
+
+    const items = JSON.parse(arrMatch[0]);
+    if (!Array.isArray(items) || items.length === 0) throw new Error('No news items returned');
+
+    gridEl.innerHTML = items.map(item => {
+      const sentiment = item.sentiment || detectSentiment((item.headline||'') + ' ' + (item.summary||''));
+      const sentClass = sentiment === 'positive' ? 'news-pos' : sentiment === 'negative' ? 'news-neg' : 'news-neu';
+      const sentLabel = sentiment === 'positive' ? '▲ Positive' : sentiment === 'negative' ? '▼ Negative' : '● Neutral';
+      const tickers = Array.isArray(item.tickers) ? item.tickers : extractTickers((item.headline||'') + ' ' + (item.summary||''));
+      const tags = tickers.slice(0,4)
+        .filter(t => STOCKS.find(s => s.ticker === t))
+        .map(t => `<span class="news-ticker-tag" onclick="showDetail('${t}')">${t}</span>`).join('');
       return `<div class="news-card">
-        <div class="news-headline">${item.headline}<span class="news-sentiment ${sentClass}">${sentLabel}</span></div>
-        <div class="news-meta">${item.source}${item.date?' · '+item.date:''}</div>
+        <div class="news-headline">${item.headline || 'No headline'}<span class="news-sentiment ${sentClass}">${sentLabel}</span></div>
+        <div class="news-meta">${item.source || 'NSE News'}${item.date ? ' · ' + item.date : ''}</div>
         <div class="news-summary">${item.summary || 'No summary available.'}</div>
-        ${tags?`<div class="news-tickers" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">${tags}</div>`:''}
-        ${linkHtml}
+        ${tags ? `<div class="news-tickers" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">${tags}</div>` : ''}
       </div>`;
     }).join('');
 
-    const sourceNames = [...new Set(top.map(i=>i.source))].join(', ');
     statusEl.style.color = 'var(--accent)';
-    statusEl.textContent = `✓ ${top.length} articles · Sources: ${sourceNames} · ${new Date().toLocaleTimeString('en-KE',{timeZone:'Africa/Nairobi'})} EAT`;
+    statusEl.textContent = `✓ ${items.length} articles loaded · ${new Date().toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
+
   } catch(err) {
+    console.error('News fetch error:', err);
     statusEl.style.color = 'var(--red)';
     statusEl.textContent = `⚠ ${err.message}`;
+    gridEl.innerHTML = '';
     emptyEl.style.display = 'block';
-    emptyEl.querySelector('span').textContent = '📡';
-    emptyEl.lastChild.textContent && (emptyEl.innerHTML = '<span>📡</span>Could not load news feeds. Check your connection and try again.');
+    emptyEl.innerHTML = '<span>📡</span>Could not load news. Check your internet connection and try again.';
   } finally {
     newsFetching = false;
     btn.disabled = false;
