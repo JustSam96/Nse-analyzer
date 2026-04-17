@@ -1555,24 +1555,24 @@ async function scrapeOfficialNSE(proxyFn) {
       cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
     }
 
-    // The NSE site provides: Company Name | ISIN Code | Volume | Last Traded Price
+    // Column 0: Company Name, Column 3: Price, Column 4: Change
     if (cells.length >= 4) {
-      const fullName = cells[0].toUpperCase();
-      const isin = cells[1];
+      const rawName = cells[0].toUpperCase();
       const price = parseFloat(cells[3].replace(/,/g, ''));
-      const changeStr = cells[4] || "0";
-      const change = parseFloat(changeStr.replace(/,/g, ''));
+      const change = parseFloat((cells[4] || '0').replace(/,/g, ''));
 
-      // Find the stock in your array by checking if the official name contains your ticker
-      // OR if your ticker is mentioned in their "Company" string
-      const stock = STOCKS.find(s => 
-        fullName.includes(s.ticker) || 
-        fullName.startsWith(s.name.toUpperCase().substring(0, 5))
-      );
+      // MATCHING LOGIC: Find which ticker this row belongs to
+      const stock = STOCKS.find(s => {
+        const ticker = s.ticker.toUpperCase();
+        const shortName = s.name.toUpperCase().split(' ')[0]; // Matches first word like "EQUITY"
+        return rawName.includes(ticker) || rawName.includes(shortName);
+      });
 
       if (stock && !isNaN(price) && price > 0) {
         const prev = price - change;
         const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
+        
+        // Save to the prices object using the Ticker as the key
         prices[stock.ticker] = { price, change, changePct };
       }
     }
@@ -1633,31 +1633,25 @@ async function fetchLivePrices() {
   let prices = {};
   let sourceUsed = '';
 
-  // ── PHASE 1: Try Official and Bulk sources ────
+  // ── PHASE 1: Full Coverage Merge ────
   for (const proxyFn of CORS_PROXIES) {
-    // Priority 1: Official NSE Website
     try {
-      statusEl.textContent = 'Fetching Official NSE.co.ke data…';
-      const officialResult = await scrapeOfficialNSE(proxyFn);
-      if (Object.keys(officialResult).length > 5) {
-        Object.assign(prices, officialResult);
-        sourceUsed = 'Official NSE Website';
+      // 1. Get official data first
+      const official = await scrapeOfficialNSE(proxyFn);
+      Object.assign(prices, official);
+      
+      // 2. Immediately supplement with Kwayisi to fill gaps
+      const backup = await scrapeKwayisi(proxyFn);
+      // Only add from backup if the ticker is still missing
+      for (const t in backup) {
+        if (!prices[t]) prices[t] = backup[t];
+      }
+      
+      if (Object.keys(prices).length > 10) {
+        sourceUsed = 'Official + Mirror Merge';
         break; 
       }
-    } catch(e) { console.warn('Official NSE scrape failed, trying mirror...'); }
-
-    // Priority 2: Kwayisi Mirror (if official is blocked or down)
-    if (Object.keys(prices).length < 5) {
-      try {
-        statusEl.textContent = 'Trying afx.kwayisi.org…';
-        const result = await scrapeKwayisi(proxyFn);
-        if (Object.keys(result).length > 3) {
-          Object.assign(prices, result);
-          sourceUsed = 'afx.kwayisi.org';
-          break;
-        }
-      } catch(e) { /* try next proxy */ }
-    }
+    } catch(e) { console.warn('Source failed, trying next proxy...'); }
   }
 
   // ── PHASE 2: Fill missing tickers individually ────────────────────
