@@ -1533,125 +1533,107 @@ async function scrapeOfficialNSE(proxyFn) {
   return prices;
 }
 
+// 1. Corrected African Financials Scraper
 async function scrapeAfricanFinancials(proxyFn) {
   const url = 'https://africanfinancials.com/nairobi-securities-exchange-kenya-share-prices/';
-  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
-  if (!res.ok) throw new Error('AF HTTP ' + res.status);
-  const html = await res.text();
-  const prices = {};
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-  let row;
-  while ((row = rowRe.exec(html)) !== null) {
-    const cells = [];
-    let cell;
-    const ci = new RegExp(cellRe.source, 'gi');
-    while ((cell = ci.exec(row[1])) !== null) {
-      cells.push(cell[1].replace(/<[^>]+>/g,'').trim());
-    }
-    for (let col = 0; col < Math.min(cells.length, 4); col++) {
-      const ticker = cells[col]?.toUpperCase()?.replace(/[^A-Z]/g,'');
-      if (ticker && STOCKS.find(s => s.ticker === ticker)) {
-        for (let pc = col+1; pc < cells.length; pc++) {
-          const price = parseFloat(cells[pc].replace(/,/g,''));
-          if (!isNaN(price) && price > 0.1) {
-            const changeRaw = parseFloat((cells[pc+1]||'').replace(/,/g,''));
-            const change = isNaN(changeRaw) ? 0 : changeRaw;
-            const prev = price - change;
-            const changePct = prev > 0 ? parseFloat(((change/prev)*100).toFixed(2)) : 0;
-            prices[ticker] = { price, change, changePct };
-            break;
+  try {
+    const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
+    if (!res.ok) return {};
+    const html = await res.text();
+    const prices = {};
+    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let row;
+    while ((row = rowRe.exec(html)) !== null) {
+      const cells = [];
+      let cell;
+      const ci = new RegExp(cellRe.source, 'gi');
+      while ((cell = ci.exec(row[1])) !== null) {
+        cells.push(cell[1].replace(/<[^>]+>/g,'').trim());
+      }
+      for (let col = 0; col < Math.min(cells.length, 4); col++) {
+        const ticker = cells[col]?.toUpperCase()?.replace(/[^A-Z]/g,'');
+        if (ticker && STOCKS.find(s => s.ticker === ticker)) {
+          for (let pc = col+1; pc < cells.length; pc++) {
+            const price = parseFloat(cells[pc].replace(/,/g,''));
+            if (!isNaN(price) && price > 0.1) {
+              const changeRaw = parseFloat((cells[pc+1]||'').replace(/,/g,''));
+              const change = isNaN(changeRaw) ? 0 : changeRaw;
+              const prev = price - change;
+              const changePct = prev > 0 ? parseFloat(((change/prev)*100).toFixed(2)) : 0;
+              prices[ticker] = { price, change, changePct };
+              break;
+            }
           }
+          break;
         }
-        break;
       }
     }
-  }
-  return prices;
+    return prices;
+  } catch(e) { return {}; }
 }
 
-// african-markets.com individual pages for precise data
+// 2. Individual Source Scrapers (Safety Nets)
 async function scrapeAfricanMarketsIndividual(proxyFn, ticker) {
   const url = `https://www.african-markets.com/en/stock-markets/nse/listed-companies/company?code=${ticker}`;
-  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const html = await res.text();
-  // Price appears as: <span ...>30.20 KES</span> or just a numeric span
-  const priceMatch = html.match(/(\d{1,6}(?:[.,]\d{1,4})?)\s*KES/i)
-    || html.match(/<span[^>]*class="[^"]*price[^"]*"[^>]*>([^<]+)</i);
-  if (!priceMatch) return null;
-  const price = parseFloat(priceMatch[1].replace(/,/g,''));
-  if (isNaN(price) || price <= 0) return null;
-  // Change — look for +x.xx or -x.xx near the price
-  const chgMatch = html.match(/([+-]\d+(?:[.,]\d+)?)\s*\/\s*([+-]\d+(?:[.,]\d+)?)%/);
-  const change    = chgMatch ? parseFloat(chgMatch[1]) : 0;
-  const changePct = chgMatch ? parseFloat(chgMatch[2]) : 0;
-  return { price, change, changePct };
+  try {
+    const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const priceMatch = html.match(/(\d{1,6}(?:[.,]\d{1,4})?)\s*KES/i) || html.match(/<span[^>]*class="[^"]*price[^"]*"[^>]*>([^<]+)</i);
+    if (!priceMatch) return null;
+    const price = parseFloat(priceMatch[1].replace(/,/g,''));
+    if (isNaN(price) || price <= 0) return null;
+    const chgMatch = html.match(/([+-]\d+(?:[.,]\d+)?)\s*\/\s*([+-]\d+(?:[.,]\d+)?)%/);
+    return { price, change: chgMatch ? parseFloat(chgMatch[1]) : 0, changePct: chgMatch ? parseFloat(chgMatch[2]) : 0 };
+  } catch(e) { return null; }
 }
 
-// mystocks.co.ke individual pages
 async function scrapeMystocks(proxyFn, ticker) {
   const url = `https://live.mystocks.co.ke/stock=${ticker}`;
-  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const html = await res.text();
-  const priceMatch = html.match(/KES\s*([\d,]+(?:\.\d+)?)/i)
-    || html.match(/([\d,]+\.\d{2})\s*KES/i);
-  if (!priceMatch) return null;
-  const price = parseFloat(priceMatch[1].replace(/,/g,''));
-  if (isNaN(price) || price <= 0) return null;
-  const chgMatch = html.match(/([+-][\d.]+)\s*\(([+-][\d.]+)%\)/);
-  const change    = chgMatch ? parseFloat(chgMatch[1]) : 0;
-  const changePct = chgMatch ? parseFloat(chgMatch[2]) : 0;
-  return { price, change, changePct };
+  try {
+    const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const priceMatch = html.match(/KES\s*([\d,]+(?:\.\d+)?)/i) || html.match(/([\d,]+\.\d{2})\s*KES/i);
+    if (!priceMatch) return null;
+    const price = parseFloat(priceMatch[1].replace(/,/g,''));
+    if (isNaN(price) || price <= 0) return null;
+    const chgMatch = html.match(/([+-][\d.]+)\s*\(([+-][\d.]+)%\)/);
+    return { price, change: chgMatch ? parseFloat(chgMatch[1]) : 0, changePct: chgMatch ? parseFloat(chgMatch[2]) : 0 };
+  } catch(e) { return null; }
 }
 
-// Main orchestrator — tries sources in order, fills gaps per-ticker
+// 3. Merging Orchestrator
 async function fetchLivePrices() {
   if (isFetching) return;
   isFetching = true;
-  const btn = document.getElementById('refresh-btn');
-  const icon = document.getElementById('refresh-icon');
-  const statusEl = document.getElementById('live-status');
-  const tsEl = document.getElementById('live-ts');
-  btn.disabled = true;
-  icon.innerHTML = '<span class="spin">↻</span>';
-  statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Merging all NSE data sources…';
+  const btn = document.getElementById('refresh-btn'), icon = document.getElementById('refresh-icon');
+  const statusEl = document.getElementById('live-status'), tsEl = document.getElementById('live-ts');
+  btn.disabled = true; icon.innerHTML = '<span class="spin">↻</span>';
+  statusEl.className = 'live-status fetching'; statusEl.textContent = 'Merging 3 data sources...';
 
   let prices = {};
   const now = new Date();
 
-  // Try each proxy to ensure connection
   for (const proxyFn of CORS_PROXIES) {
     try {
-      // 1. Scrape Official NSE (Primary source)
+      // Step A: Official NSE
       const official = await scrapeOfficialNSE(proxyFn);
       Object.assign(prices, official);
-      console.log(`Fetched ${Object.keys(official).length} from Official NSE`);
-
-      // 2. Scrape Kwayisi (Fills gaps for illiquid stocks)
+      
+      // Step B: Kwayisi (fill gaps)
       const kwayisi = await scrapeKwayisi(proxyFn);
-      for (const t in kwayisi) {
-        if (!prices[t]) prices[t] = kwayisi[t]; // Only add if missing
-      }
-      console.log(`Total after Kwayisi: ${Object.keys(prices).length}`);
+      for (let t in kwayisi) { if (!prices[t]) prices[t] = kwayisi[t]; }
 
-      // 3. Scrape African Financials (Final safety net)
-      const african = await scrapeAfricanFinancials(proxyFn);
-      for (const t in african) {
-        if (!prices[t]) prices[t] = african[t]; // Only add if still missing
-      }
-      console.log(`Total after African Financials: ${Object.keys(prices).length}`);
+      // Step C: African Financials (fill remaining)
+      const af = await scrapeAfricanFinancials(proxyFn);
+      for (let t in af) { if (!prices[t]) prices[t] = af[t]; }
 
-      // If we have a significant number of stocks, we can stop trying proxies
-      if (Object.keys(prices).length >= STOCKS.length) break; 
-    } catch (e) {
-      console.warn('Proxy/Source failed, trying next...', e);
-    }
+      if (Object.keys(prices).length > 30) break; 
+    } catch (e) { console.warn('Proxy link failed, trying next...'); }
   }
 
-  // Apply results to the STOCKS array
   let updated = 0;
   for (const [ticker, info] of Object.entries(prices)) {
     if (info && info.price > 0) {
@@ -1659,11 +1641,8 @@ async function fetchLivePrices() {
       const stock = STOCKS.find(s => s.ticker === ticker);
       if (stock) {
         stock.price = info.price;
-        // Update live yield calculation
-        const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
-        if (divEntry) {
-          stock.yield = parseFloat(((divEntry.amount / stock.price) * 100).toFixed(1));
-        }
+        const div = DIVIDENDS.find(d => d.ticker === ticker);
+        if (div) stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
         updated++;
       }
     }
@@ -1671,19 +1650,14 @@ async function fetchLivePrices() {
 
   if (updated > 0) {
     statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices merged & live`;
-    tsEl.textContent = `· Multi-Source · ${now.toLocaleTimeString('en-KE')} EAT`;
+    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices merged`;
+    tsEl.textContent = `· ${now.toLocaleTimeString('en-KE')} EAT`;
     renderTable(); renderWatchlist(); renderPortfolio();
-    toast(`✓ Data merged from 3 sources: ${updated} stocks updated`);
   } else {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ All sources failed. Check internet.';
-    toast('Live fetch failed');
+    statusEl.textContent = '⚠ Fetch failed. Check internet.';
   }
-
-  isFetching = false;
-  btn.disabled = false;
-  icon.innerHTML = '↻';
+  isFetching = false; btn.disabled = false; icon.innerHTML = '↻';
 }
 
 // Auto-fetch on load (slight delay so page renders first)
