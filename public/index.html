@@ -1223,33 +1223,50 @@ function removeHolding(id){
 function renderPortfolio(){
   const empty=document.getElementById('port-empty');
   const tbody=document.getElementById('port-tbody');
-  if(!portfolio.length){tbody.innerHTML='';empty.style.display='block';document.getElementById('port-summary').innerHTML='';document.getElementById('m-portval').textContent='KES 0';document.getElementById('m-portpnl').textContent='—';return;}
+  if(!portfolio.length){ /* ... existing empty logic ... */ return;}
+  
   empty.style.display='none';
   let totalBook=0,totalMkt=0,totalDivIncome=0;
+
   const rows=portfolio.map(h=>{
-    const s=STOCKS.find(x=>x.ticker===h.ticker)||{price:h.buyPrice,yield:0,name:h.ticker};
-    const book=h.shares*h.buyPrice;
-    const mkt=h.shares*s.price;
-    const pnl=mkt-book;
-    const pnlPct=((pnl/book)*100).toFixed(1);
-    const yieldOnCost=((s.price*s.yield/100)/h.buyPrice*100).toFixed(1);
-    const annualDiv=h.shares*(s.price*s.yield/100);
-    totalBook+=book;totalMkt+=mkt;totalDivIncome+=annualDiv;
+    // CHANGE THIS LINE: Check livePrices first, then fall back to STOCKS
+    const live = livePrices[h.ticker];
+    const s = STOCKS.find(x=>x.ticker===h.ticker) || {price:h.buyPrice,yield:0,name:h.ticker};
+    
+    // Use the live price if it exists, otherwise use the static stock price
+    const currentPrice = live ? live.price : s.price;
+    const currentYield = live ? (s.price * s.yield / 100) / live.price * 100 : s.yield;
+
+    const book = h.shares * h.buyPrice;
+    const mkt = h.shares * currentPrice; // Updated to use currentPrice
+    const pnl = mkt - book;
+    const pnlPct = book > 0 ? ((pnl/book)*100).toFixed(1) : 0;
+    
+    totalBook+=book; totalMkt+=mkt;
+    
+    // Calculate dividend income based on the shares and the current yield/price
+    const annualDiv = h.shares * (currentPrice * (s.yield/100));
+    totalDivIncome+=annualDiv;
+
     const pnlColor=pnl>=0?'var(--accent)':'var(--red)';
     const pnlSign=pnl>=0?'+':'';
-    return`<tr>
+
+    return `<tr>
       <td class="ticker-badge">${h.ticker}</td>
-      <td style="font-size:12px;color:var(--muted);">${s.name||h.ticker}</td>
+      <td style="font-size:12px;color:var(--muted);">${s.name}</td>
       <td style="font-family:var(--mono);">${h.shares.toLocaleString()}</td>
       <td style="font-family:var(--mono);">KES ${h.buyPrice.toFixed(2)}</td>
-      <td style="font-family:var(--mono);">KES ${s.price.toFixed(2)}</td>
+      <td style="font-family:var(--mono);">KES ${currentPrice.toFixed(2)}</td> 
       <td style="font-family:var(--mono);">KES ${Math.round(book).toLocaleString()}</td>
       <td style="font-family:var(--mono);">KES ${Math.round(mkt).toLocaleString()}</td>
       <td style="font-family:var(--mono);color:${pnlColor};">${pnlSign}KES ${Math.round(pnl).toLocaleString()} (${pnlSign}${pnlPct}%)</td>
-      <td style="font-family:var(--mono);color:var(--accent);">${yieldOnCost}%</td>
+      <td style="font-family:var(--mono);color:var(--accent);">${currentYield.toFixed(1)}%</td>
       <td><button class="btn btn-sm btn-red" onclick="removeHolding(${h.id})">&#x2715;</button></td>
     </tr>`;
   }).join('');
+  
+  // ... rest of the function (Total P&L and Summary)
+}
   tbody.innerHTML=rows;
   const totalPnl=totalMkt-totalBook;
   const totalPnlPct=totalBook>0?((totalPnl/totalBook)*100).toFixed(1):0;
