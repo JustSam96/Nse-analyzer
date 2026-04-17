@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NSE Dividend Dashboard v4</title>
+<title>NSE Dividend Dashboard v5</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase -->
 <style>
@@ -252,6 +252,49 @@ tbody td { padding:10px 12px; vertical-align:middle; }
 .page-btn.active { background:var(--accent); color:var(--navy); border-color:var(--accent); font-weight:600; }
 .page-btn:disabled { opacity:0.3; cursor:not-allowed; }
 
+/* NEWS CARDS */
+.news-card { background:var(--navy2); border:1px solid var(--border); border-radius:10px; padding:16px; }
+.news-headline { font-size:14px; font-weight:500; margin-bottom:6px; line-height:1.4; }
+.news-meta { font-size:11px; color:var(--muted); font-family:var(--mono); margin-bottom:8px; }
+.news-summary { font-size:12px; color:var(--text2); line-height:1.6; }
+.news-tickers { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.news-ticker-tag { font-size:10px; font-family:var(--mono); padding:2px 8px; background:rgba(0,212,160,0.1); border:1px solid rgba(0,212,160,0.2); border-radius:12px; color:var(--accent); cursor:pointer; }
+.news-ticker-tag:hover { background:rgba(0,212,160,0.2); }
+.news-sentiment { display:inline-block; font-size:10px; font-family:var(--mono); padding:2px 8px; border-radius:12px; margin-left:8px; }
+.news-pos { background:rgba(0,212,160,0.15); color:var(--accent); }
+.news-neg { background:rgba(255,82,82,0.15); color:var(--red); }
+.news-neu { background:rgba(136,153,170,0.15); color:var(--muted); }
+
+/* KEYBOARD SHORTCUT HINT */
+.kb-hint { font-size:10px; color:var(--muted); font-family:var(--mono); padding:4px 10px; }
+kbd { background:var(--navy3); border:1px solid var(--border); border-radius:3px; padding:1px 5px; font-size:10px; font-family:var(--mono); }
+
+/* LIGHT THEME */
+body.light {
+  --navy: #f0f4f8;
+  --navy2: #ffffff;
+  --navy3: #e2e8f0;
+  --accent: #00a87e;
+  --accent2: #007a5c;
+  --gold: #c48c00;
+  --red: #d93025;
+  --muted: #64748b;
+  --border: rgba(0,168,126,0.2);
+  --card: rgba(255,255,255,0.9);
+  --text: #1a2332;
+  --text2: #334155;
+}
+body.light::before { background-image: linear-gradient(rgba(0,168,126,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,168,126,0.04) 1px, transparent 1px); }
+body.light .modal-box, body.light .overlay-box { background:#ffffff; }
+body.light .toast { background:#ffffff; }
+body.light select, body.light .form-group select, body.light .form-group input { background:#f8fafc; }
+
+/* PROJECTOR TABLE */
+.proj-table { width:100%; border-collapse:collapse; font-size:12px; }
+.proj-table td, .proj-table th { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,0.05); font-family:var(--mono); }
+.proj-table th { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px; }
+.proj-table tr:last-child td { border-bottom:none; }
+
 @media(max-width:600px){
   .metrics { grid-template-columns:repeat(2,1fr); }
   thead th:nth-child(4),tbody td:nth-child(4),
@@ -274,7 +317,7 @@ tbody td { padding:10px 12px; vertical-align:middle; }
     </div>
     <div class="logo-text">
       <h1>NSE Dividend Dashboard</h1>
-      <p>Faida Investment Bank · Manual Trading Assistant · v4</p>
+      <p>Faida Investment Bank · Manual Trading Assistant · v5</p>
     </div>
   </div>
   <div class="header-right">
@@ -283,6 +326,7 @@ tbody td { padding:10px 12px; vertical-align:middle; }
       <span id="market-status-text">Checking...</span>
     </div>
     <div id="clock">--:--:-- EAT</div>
+    <button class="account-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
     <div class="account-area">
       <span class="sync-indicator" id="sync-indicator">○ local</span>
       <button class="account-btn" id="account-btn" onclick="openAuthModal()">Sign In</button>
@@ -307,6 +351,7 @@ tbody td { padding:10px 12px; vertical-align:middle; }
   <div class="tab" onclick="switchTab('calendar',this)">Dividend Calendar</div>
   <div class="tab" onclick="switchTab('portfolio',this)">Portfolio</div>
   <div class="tab" onclick="switchTab('alerts',this)">Price Alerts</div>
+  <div class="tab" onclick="switchTab('news',this)">Market News</div>
   <div class="tab" onclick="switchTab('settings',this)">Settings</div>
 </div>
 
@@ -322,6 +367,9 @@ tbody td { padding:10px 12px; vertical-align:middle; }
     <button class="btn-refresh" id="refresh-btn" onclick="fetchLivePrices()">
       <span id="refresh-icon">↻</span> Refresh Prices
     </button>
+  </div>
+  <div class="kb-hint" style="margin-bottom:8px;">
+    Shortcuts: <kbd>J</kbd>/<kbd>K</kbd> navigate · <kbd>Enter</kbd> open detail · <kbd>W</kbd> toggle watch · <kbd>R</kbd> refresh prices · <kbd>Esc</kbd> close panel
   </div>
   <div class="panel">
     <div class="panel-header">
@@ -396,7 +444,10 @@ tbody td { padding:10px 12px; vertical-align:middle; }
   <div class="panel">
     <div class="panel-header">
       <h2>My Watchlist</h2>
-      <button class="btn btn-sm btn-red" onclick="clearWatchlist()">Clear all</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" onclick="exportWatchlistCSV()">⬇ Export CSV</button>
+        <button class="btn btn-sm btn-red" onclick="clearWatchlist()">Clear all</button>
+      </div>
     </div>
     <div class="panel-body">
       <div class="watch-grid" id="watch-grid"></div>
@@ -426,7 +477,13 @@ tbody td { padding:10px 12px; vertical-align:middle; }
 <!-- ===== PORTFOLIO ===== -->
 <div class="tab-content" id="tab-portfolio">
   <div class="panel">
-    <div class="panel-header"><h2>Portfolio Tracker</h2></div>
+    <div class="panel-header">
+      <h2>Portfolio Tracker</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm" onclick="exportPortfolioCSV()">⬇ Export CSV</button>
+        <button class="btn btn-sm" onclick="toggleProjector()" id="projector-btn">📈 Income Projector</button>
+      </div>
+    </div>
     <div class="panel-body">
       <div class="add-form">
         <div class="form-group">
@@ -446,6 +503,19 @@ tbody td { padding:10px 12px; vertical-align:middle; }
           <input type="date" id="p-date" style="width:150px;">
         </div>
         <button class="btn btn-accent btn-sm" onclick="addHolding()" style="align-self:flex-end;padding:8px 16px;">+ Add</button>
+      </div>
+      <!-- INCOME PROJECTOR -->
+      <div id="projector-panel" style="display:none;background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--accent);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;">📈 Dividend Income Projector</div>
+        <div id="projector-content" style="font-size:13px;color:var(--text2);"></div>
+      </div>
+      <!-- PIE CHART -->
+      <div id="port-chart-wrap" style="display:none;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">Sector Allocation</div>
+        <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+          <canvas id="port-pie" width="160" height="160" style="flex-shrink:0;"></canvas>
+          <div id="port-legend" style="display:flex;flex-direction:column;gap:6px;font-size:12px;font-family:var(--mono);"></div>
+        </div>
       </div>
       <div class="port-summary" id="port-summary"></div>
       <div class="port-table">
@@ -491,6 +561,23 @@ tbody td { padding:10px 12px; vertical-align:middle; }
       </div>
       <div class="alerts-list" id="alerts-list"></div>
       <div class="empty" id="alerts-empty"><span>◈</span>No alerts set.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MARKET NEWS ===== -->
+<div class="tab-content" id="tab-news">
+  <div class="panel">
+    <div class="panel-header">
+      <h2>NSE Market News</h2>
+      <button class="btn-refresh" id="news-refresh-btn" onclick="fetchMarketNews()">
+        <span id="news-refresh-icon">↻</span> Fetch Latest News
+      </button>
+    </div>
+    <div class="panel-body">
+      <div id="news-status" style="font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:14px;display:none;"></div>
+      <div id="news-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <div class="empty" id="news-empty"><span>📰</span>Click "Fetch Latest News" to load current NSE & Kenya market news.</div>
     </div>
   </div>
 </div>
@@ -725,6 +812,7 @@ function renderAuthModal() {
       <div id="auth-form-login">
         <div class="field-group"><label>Email</label><input type="email" id="auth-email" placeholder="you@example.com"></div>
         <div class="field-group"><label>Password</label><input type="password" id="auth-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitAuth('login')"></div>
+        <div style="text-align:right;margin-bottom:12px;"><button style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:var(--mono);" onclick="sendPasswordReset()">Forgot password?</button></div>
         <div class="modal-err" id="auth-err"></div>
         <button class="btn-modal-submit" id="auth-submit-btn" onclick="submitAuth('login')">Sign In</button>
         <div class="modal-divider">— or —</div>
@@ -1176,6 +1264,8 @@ function renderPortfolio(){
     <div class="port-metric"><div class="port-metric-label">Est. Annual Dividends</div><div class="port-metric-value" style="color:var(--gold);">KES ${Math.round(totalDivIncome).toLocaleString()}</div></div>
     <div class="port-metric"><div class="port-metric-label">Holdings</div><div class="port-metric-value" style="color:var(--text);">${portfolio.length}</div></div>
   `;
+  // Draw pie chart and update projector
+  setTimeout(() => { drawPieChart(); if(projectorVisible) renderProjector(); }, 0);
 }
 
 // ── PRICE ALERTS ──────────────────────────────────────────────────
@@ -1334,19 +1424,140 @@ function switchTab(name,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   el.classList.add('active');
+  selectedRow = -1; // reset keyboard row selection on tab change
   if(name==='watchlist')renderWatchlist();
   if(name==='calendar')renderCalendar();
   if(name==='portfolio')renderPortfolio();
   if(name==='alerts')renderAlerts();
 }
 function switchTabById(name){
-  const tabNames=['screener','watchlist','calendar','portfolio','alerts','settings'];
+  const tabNames=['screener','watchlist','calendar','portfolio','alerts','news','settings'];
   const tabs=document.querySelectorAll('.tab');
   const idx=tabNames.indexOf(name);
   if(idx>=0)switchTab(name,tabs[idx]);
 }
 
-// ── LIVE PRICE FETCHING (works from ANY browser with internet) ────
+// ── LIVE PRICE FETCHING — Direct web scraping via CORS proxies ────
+// No Claude API needed. Works in any browser with internet access.
+// Strategy: try multiple CORS-proxy + source combos until one succeeds.
+
+const CORS_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+// afx.kwayisi.org/nse  — the richest public NSE data page
+async function scrapeKwayisi(proxyFn) {
+  const url = 'https://afx.kwayisi.org/nse/';
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const html = await res.text();
+  const prices = {};
+  // The page has rows like: <tr ...><td>SCOM</td><td>30.20</td><td>+0.90</td>...
+  // Parse every table row that contains a known ticker
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  let row;
+  while ((row = rowRe.exec(html)) !== null) {
+    const cells = [];
+    let cell;
+    const cellIter = new RegExp(cellRe.source, 'gi');
+    while ((cell = cellIter.exec(row[1])) !== null) {
+      cells.push(cell[1].replace(/<[^>]+>/g,'').trim());
+    }
+    if (cells.length >= 3) {
+      const ticker = cells[0].toUpperCase();
+      const price  = parseFloat(cells[1].replace(/,/g,''));
+      const change = parseFloat(cells[2].replace(/,/g,''));
+      if (STOCKS.find(s => s.ticker === ticker) && !isNaN(price) && price > 0) {
+        const prev = price - (isNaN(change) ? 0 : change);
+        const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
+        prices[ticker] = { price, change: isNaN(change) ? 0 : change, changePct };
+      }
+    }
+  }
+  return prices;
+}
+
+// africanfinancials.com — alternative NSE price table
+async function scrapeAfricanFinancials(proxyFn) {
+  const url = 'https://africanfinancials.com/nairobi-securities-exchange-kenya-share-prices/';
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const html = await res.text();
+  const prices = {};
+  // Rows look like: EQTY ... 74.75 ... +4.25 ...
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  let row;
+  while ((row = rowRe.exec(html)) !== null) {
+    const cells = [];
+    let cell;
+    const ci = new RegExp(cellRe.source, 'gi');
+    while ((cell = ci.exec(row[1])) !== null) {
+      cells.push(cell[1].replace(/<[^>]+>/g,'').trim());
+    }
+    // try cells[0]=ticker, cells[3]=price or cells[1]=price
+    for (let col = 0; col < Math.min(cells.length, 4); col++) {
+      const ticker = cells[col]?.toUpperCase()?.replace(/[^A-Z]/g,'');
+      if (ticker && STOCKS.find(s => s.ticker === ticker)) {
+        // find the first numeric cell after ticker
+        for (let pc = col+1; pc < cells.length; pc++) {
+          const price = parseFloat(cells[pc].replace(/,/g,''));
+          if (!isNaN(price) && price > 0.1) {
+            const changeRaw = parseFloat((cells[pc+1]||'').replace(/,/g,''));
+            const change = isNaN(changeRaw) ? 0 : changeRaw;
+            const prev = price - change;
+            const changePct = prev > 0 ? parseFloat(((change/prev)*100).toFixed(2)) : 0;
+            prices[ticker] = { price, change, changePct };
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+  return prices;
+}
+
+// african-markets.com individual pages for precise data
+async function scrapeAfricanMarketsIndividual(proxyFn, ticker) {
+  const url = `https://www.african-markets.com/en/stock-markets/nse/listed-companies/company?code=${ticker}`;
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const html = await res.text();
+  // Price appears as: <span ...>30.20 KES</span> or just a numeric span
+  const priceMatch = html.match(/(\d{1,6}(?:[.,]\d{1,4})?)\s*KES/i)
+    || html.match(/<span[^>]*class="[^"]*price[^"]*"[^>]*>([^<]+)</i);
+  if (!priceMatch) return null;
+  const price = parseFloat(priceMatch[1].replace(/,/g,''));
+  if (isNaN(price) || price <= 0) return null;
+  // Change — look for +x.xx or -x.xx near the price
+  const chgMatch = html.match(/([+-]\d+(?:[.,]\d+)?)\s*\/\s*([+-]\d+(?:[.,]\d+)?)%/);
+  const change    = chgMatch ? parseFloat(chgMatch[1]) : 0;
+  const changePct = chgMatch ? parseFloat(chgMatch[2]) : 0;
+  return { price, change, changePct };
+}
+
+// mystocks.co.ke individual pages
+async function scrapeMystocks(proxyFn, ticker) {
+  const url = `https://live.mystocks.co.ke/stock=${ticker}`;
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const html = await res.text();
+  const priceMatch = html.match(/KES\s*([\d,]+(?:\.\d+)?)/i)
+    || html.match(/([\d,]+\.\d{2})\s*KES/i);
+  if (!priceMatch) return null;
+  const price = parseFloat(priceMatch[1].replace(/,/g,''));
+  if (isNaN(price) || price <= 0) return null;
+  const chgMatch = html.match(/([+-][\d.]+)\s*\(([+-][\d.]+)%\)/);
+  const change    = chgMatch ? parseFloat(chgMatch[1]) : 0;
+  const changePct = chgMatch ? parseFloat(chgMatch[2]) : 0;
+  return { price, change, changePct };
+}
+
+// Main orchestrator — tries sources in order, fills gaps per-ticker
 async function fetchLivePrices() {
   if (isFetching) return;
   isFetching = true;
@@ -1357,93 +1568,371 @@ async function fetchLivePrices() {
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
   statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Fetching live prices from NSE…';
+  statusEl.textContent = 'Scraping NSE prices…';
   tsEl.textContent = '';
 
-  // Batch tickers (fetch all)
-  const tickers = STOCKS.map(s => s.ticker).join(', ');
+  let prices = {};
+  let sourceUsed = '';
 
+  // ── PHASE 1: Try bulk sources (kwayisi then africanfinancials) ────
+  for (const proxyFn of CORS_PROXIES) {
+    if (Object.keys(prices).length >= STOCKS.length * 0.6) break; // 60%+ found
+    try {
+      statusEl.textContent = 'Trying afx.kwayisi.org…';
+      const result = await scrapeKwayisi(proxyFn);
+      if (Object.keys(result).length > 3) {
+        Object.assign(prices, result);
+        sourceUsed = 'afx.kwayisi.org';
+        break;
+      }
+    } catch(e) { /* try next */ }
+    try {
+      statusEl.textContent = 'Trying africanfinancials.com…';
+      const result = await scrapeAfricanFinancials(proxyFn);
+      if (Object.keys(result).length > 3) {
+        Object.assign(prices, result);
+        sourceUsed = 'africanfinancials.com';
+        break;
+      }
+    } catch(e) { /* try next */ }
+  }
+
+  // ── PHASE 2: Fill missing tickers individually ────────────────────
+  const missing = STOCKS.map(s => s.ticker).filter(t => !prices[t]);
+  if (missing.length > 0 && missing.length <= 10) {
+    statusEl.textContent = `Filling ${missing.length} missing prices…`;
+    for (const ticker of missing) {
+      for (const proxyFn of CORS_PROXIES) {
+        try {
+          const r = await scrapeAfricanMarketsIndividual(proxyFn, ticker);
+          if (r) { prices[ticker] = r; break; }
+        } catch(e) {}
+        try {
+          const r = await scrapeMystocks(proxyFn, ticker);
+          if (r) { prices[ticker] = r; break; }
+        } catch(e) {}
+      }
+    }
+  }
+
+  // ── PHASE 3: Apply results ────────────────────────────────────────
+  const now = new Date();
+  let updated = 0;
+  for (const [ticker, info] of Object.entries(prices)) {
+    if (info && info.price && !isNaN(info.price) && info.price > 0) {
+      livePrices[ticker] = { ...info, fetchedAt: now };
+      const stock = STOCKS.find(s => s.ticker === ticker);
+      if (stock) {
+        stock.price = info.price;
+        // Recalculate yield from live dividend data
+        const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
+        if (divEntry && stock.price > 0) {
+          stock.yield = parseFloat(((divEntry.amount / stock.price) * 100).toFixed(1));
+        }
+        updated++;
+      }
+    }
+  }
+
+  if (updated === 0) {
+    // ── PHASE 4: Last resort — allorigins fetch of kwayisi JSON-like endpoint
+    try {
+      statusEl.textContent = 'Trying fallback source…';
+      const url = 'https://afx.kwayisi.org/nse/';
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(15000) });
+      const html = await res.text();
+      // brute-force: find any "TICKER price" pattern in raw HTML
+      const pattern = /\b([A-Z]{2,5})\b[\s\S]{0,80}?(\d{1,5}\.\d{2})/g;
+      let m;
+      while ((m = pattern.exec(html)) !== null) {
+        const ticker = m[1], price = parseFloat(m[2]);
+        if (STOCKS.find(s => s.ticker === ticker) && price > 0 && !livePrices[ticker]) {
+          livePrices[ticker] = { price, change: 0, changePct: 0, fetchedAt: now };
+          const stock = STOCKS.find(s => s.ticker === ticker);
+          if (stock) { stock.price = price; updated++; }
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (updated > 0) {
+    statusEl.className = 'live-status success';
+    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices live`;
+    tsEl.textContent = `· ${sourceUsed || 'multi-source'} · ${now.toLocaleTimeString('en-KE', { timeZone:'Africa/Nairobi' })} EAT`;
+    renderTable(); renderWatchlist(); renderPortfolio();
+    toast(`✓ ${updated} live NSE prices loaded`);
+  } else {
+    statusEl.className = 'live-status error';
+    statusEl.textContent = '⚠ Could not reach NSE sources. Check internet & try again.';
+    tsEl.textContent = '';
+    toast('Live fetch failed — static prices shown');
+  }
+
+  isFetching = false;
+  btn.disabled = false;
+  icon.innerHTML = '↻';
+}
+
+// Auto-fetch on load (slight delay so page renders first)
+setTimeout(() => fetchLivePrices(), 800);
+// Auto-refresh every 3 minutes during market hours
+setInterval(() => {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+  const day = now.getDay(), h = now.getHours(), m = now.getMinutes();
+  if (day >= 1 && day <= 5 && (h > 9 || (h === 9 && m >= 30)) && h < 15) fetchLivePrices();
+}, 3 * 60 * 1000);
+
+// ── THEME TOGGLE ─────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.getElementById('theme-btn').textContent = isLight ? '🌙' : '☀';
+  try { localStorage.setItem('nse_theme', isLight ? 'light' : 'dark'); } catch(e) {}
+}
+function initTheme() {
+  try {
+    const t = localStorage.getItem('nse_theme');
+    if (t === 'light') { document.body.classList.add('light'); document.getElementById('theme-btn').textContent = '🌙'; }
+  } catch(e) {}
+}
+
+// ── EXPORT CSV ───────────────────────────────────────────────────
+function downloadCSV(filename, rows) {
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = filename;
+  a.click();
+}
+function exportWatchlistCSV() {
+  if (!watchlist.length) { toast('Watchlist is empty'); return; }
+  const data = scored().filter(s => watchlist.includes(s.ticker));
+  const rows = [['Ticker','Company','Sector','Price (KES)','Yield %','Score','Signal','Div.Years','Payout%','P/E']];
+  data.forEach(s => rows.push([s.ticker, s.name, s.sector, s.price.toFixed(2), s.yield.toFixed(1), s.score, s.signal, s.cons, s.payout, s.pe]));
+  downloadCSV('nse_watchlist.csv', rows);
+  toast('✓ Watchlist exported');
+}
+function exportPortfolioCSV() {
+  if (!portfolio.length) { toast('Portfolio is empty'); return; }
+  const rows = [['Ticker','Company','Shares','Buy Price (KES)','Current Price (KES)','Book Value','Market Value','P&L','P&L %','Buy Date']];
+  portfolio.forEach(h => {
+    const s = STOCKS.find(x => x.ticker === h.ticker) || { price: h.buyPrice, name: h.ticker };
+    const book = h.shares * h.buyPrice, mkt = h.shares * s.price;
+    const pnl = mkt - book, pnlPct = ((pnl/book)*100).toFixed(1);
+    rows.push([h.ticker, s.name, h.shares, h.buyPrice.toFixed(2), s.price.toFixed(2),
+               Math.round(book), Math.round(mkt), Math.round(pnl), pnlPct+'%', h.date]);
+  });
+  downloadCSV('nse_portfolio.csv', rows);
+  toast('✓ Portfolio exported');
+}
+
+// ── PORTFOLIO PIE CHART ──────────────────────────────────────────
+const PIE_COLORS = ['#00d4a0','#f5c842','#7eb0e8','#ff5252','#a78bfa','#fb923c','#34d399','#f472b6','#60a5fa','#fbbf24'];
+function drawPieChart() {
+  if (!portfolio.length) { document.getElementById('port-chart-wrap').style.display='none'; return; }
+  const canvas = document.getElementById('port-pie');
+  const ctx = canvas.getContext('2d');
+  // Build sector totals by market value
+  const sectorMap = {};
+  portfolio.forEach(h => {
+    const s = STOCKS.find(x => x.ticker === h.ticker) || { sector:'Other', price: h.buyPrice };
+    const mkt = h.shares * s.price;
+    sectorMap[s.sector] = (sectorMap[s.sector] || 0) + mkt;
+  });
+  const entries = Object.entries(sectorMap).sort((a,b)=>b[1]-a[1]);
+  const total = entries.reduce((s,[,v])=>s+v, 0);
+  ctx.clearRect(0, 0, 160, 160);
+  let startAngle = -Math.PI/2;
+  entries.forEach(([sector, val], i) => {
+    const slice = (val / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(80, 80);
+    ctx.arc(80, 80, 72, startAngle, startAngle + slice);
+    ctx.closePath();
+    ctx.fillStyle = PIE_COLORS[i % PIE_COLORS.length];
+    ctx.fill();
+    startAngle += slice;
+  });
+  // Center hole
+  ctx.beginPath();
+  ctx.arc(80, 80, 38, 0, 2*Math.PI);
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--navy2').trim() || '#0f2040';
+  ctx.fill();
+  // Legend
+  document.getElementById('port-legend').innerHTML = entries.map(([sector, val], i) =>
+    `<div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:10px;height:10px;border-radius:2px;background:${PIE_COLORS[i%PIE_COLORS.length]};flex-shrink:0;"></div>
+      <span style="color:var(--text2);">${sector}</span>
+      <span style="color:var(--muted);margin-left:auto;">${((val/total)*100).toFixed(1)}%</span>
+    </div>`
+  ).join('');
+  document.getElementById('port-chart-wrap').style.display = '';
+}
+
+// ── DIVIDEND INCOME PROJECTOR ────────────────────────────────────
+let projectorVisible = false;
+function toggleProjector() {
+  projectorVisible = !projectorVisible;
+  const panel = document.getElementById('projector-panel');
+  const btn = document.getElementById('projector-btn');
+  panel.style.display = projectorVisible ? '' : 'none';
+  btn.style.borderColor = projectorVisible ? 'var(--accent)' : '';
+  btn.style.color = projectorVisible ? 'var(--accent)' : '';
+  if (projectorVisible) renderProjector();
+}
+function renderProjector() {
+  if (!portfolio.length) { document.getElementById('projector-content').innerHTML = '<p style="color:var(--muted);">Add holdings to project income.</p>'; return; }
+  let rows = '', totalAnnual = 0;
+  portfolio.forEach(h => {
+    const s = STOCKS.find(x => x.ticker === h.ticker) || { price: h.buyPrice, yield: 0, name: h.ticker };
+    const annual = h.shares * (s.price * s.yield / 100);
+    totalAnnual += annual;
+    const monthly = annual / 12;
+    const quarterly = annual / 4;
+    rows += `<tr>
+      <td style="color:var(--accent);">${h.ticker}</td>
+      <td>${h.shares.toLocaleString()}</td>
+      <td style="color:var(--accent);">${s.yield > 0 ? s.yield.toFixed(1)+'%' : '—'}</td>
+      <td>KES ${Math.round(annual).toLocaleString()}</td>
+      <td>KES ${Math.round(quarterly).toLocaleString()}</td>
+      <td>KES ${Math.round(monthly).toLocaleString()}</td>
+    </tr>`;
+  });
+  document.getElementById('projector-content').innerHTML = `
+    <table class="proj-table">
+      <thead><tr><th>Ticker</th><th>Shares</th><th>Yield</th><th>Annual Est.</th><th>Quarterly Est.</th><th>Monthly Est.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:14px;padding:14px;background:rgba(0,212,160,0.06);border:1px solid rgba(0,212,160,0.15);border-radius:8px;display:flex;gap:24px;flex-wrap:wrap;">
+      <div><div style="font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.8px;">Total Annual Income</div><div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--accent);">KES ${Math.round(totalAnnual).toLocaleString()}</div></div>
+      <div><div style="font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.8px;">Avg Monthly</div><div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--gold);">KES ${Math.round(totalAnnual/12).toLocaleString()}</div></div>
+      <div><div style="font-size:10px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.8px;">Avg Daily</div><div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--text);">KES ${Math.round(totalAnnual/365).toLocaleString()}</div></div>
+    </div>
+    <p style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:8px;">Estimates based on current yields. Past dividends do not guarantee future returns.</p>
+  `;
+}
+
+// ── MARKET NEWS (Claude-powered) ─────────────────────────────────
+let newsFetching = false;
+async function fetchMarketNews() {
+  if (newsFetching) return;
+  newsFetching = true;
+  const btn = document.getElementById('news-refresh-btn');
+  const icon = document.getElementById('news-refresh-icon');
+  const statusEl = document.getElementById('news-status');
+  const gridEl = document.getElementById('news-grid');
+  const emptyEl = document.getElementById('news-empty');
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spin">↻</span>';
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Fetching latest NSE & Kenya market news…';
+  emptyEl.style.display = 'none';
+  gridEl.innerHTML = '';
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        max_tokens: 3000,
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        system: `You are a financial data assistant for the Nairobi Securities Exchange (NSE), Kenya. Search for the latest NSE Kenya stock prices and return ONLY a valid JSON object. No markdown, no explanation, no code fences — raw JSON only.
+        system: `You are a financial news assistant for NSE Kenya. Search for the latest NSE Kenya stock market news, corporate announcements, earnings, and economic news relevant to Kenyan investors. Return ONLY a valid JSON array of news items. No markdown, no explanation, no code fences — raw JSON only.
 Format:
-{
-  "TICKER": { "price": 12.34, "change": 0.50, "changePct": 4.23 },
-  ...
-}
-Search afx.kwayisi.org/nse, african-markets.com, or investing.com for current NSE prices. Prices in KES. If unavailable, use null.`,
-        messages: [{
-          role: 'user',
-          content: `Search for current NSE Kenya stock prices for: ${tickers}. Today is ${new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })}. Return raw JSON only.`
-        }]
+[
+  {
+    "headline": "News headline here",
+    "summary": "2-3 sentence summary of what happened and why it matters to investors",
+    "source": "Publication name",
+    "date": "e.g. Apr 17, 2026",
+    "tickers": ["SCOM","KCB"],
+    "sentiment": "positive|negative|neutral"
+  }
+]
+Return 6-10 recent news items. Focus on: earnings results, dividend announcements, regulatory news, M&A, major NSE index moves, economic data affecting NSE.`,
+        messages: [{ role: 'user', content: `Search for the latest NSE Kenya stock market news and corporate announcements. Today is ${new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })}. Return raw JSON array only.` }]
       })
     });
-
     const data = await response.json();
     let rawText = '';
-    for (const block of data.content) {
-      if (block.type === 'text') rawText += block.text;
-    }
+    for (const block of data.content) { if (block.type === 'text') rawText += block.text; }
     rawText = rawText.replace(/```json|```/g, '').trim();
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found in response');
-    const parsed = JSON.parse(jsonMatch[0]);
-    const now = new Date();
-    let updated = 0;
-    for (const [ticker, info] of Object.entries(parsed)) {
-      if (info && info.price && !isNaN(info.price)) {
-        livePrices[ticker] = {
-          price: parseFloat(info.price),
-          change: parseFloat(info.change ?? 0),
-          changePct: parseFloat(info.changePct ?? 0),
-          fetchedAt: now
-        };
-        const stock = STOCKS.find(s => s.ticker === ticker);
-        if (stock) {
-          stock.price = parseFloat(info.price);
-          const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
-          if (divEntry && stock.price > 0) {
-            stock.yield = parseFloat(((divEntry.amount / stock.price) * 100).toFixed(1));
-          }
-          updated++;
-        }
-      }
-    }
-    if (updated === 0) throw new Error('No valid prices returned');
-    statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated} prices updated`;
-    tsEl.textContent = `· Last fetched ${now.toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi' })} EAT`;
-    renderTable(); renderWatchlist(); renderPortfolio();
-    toast(`✓ ${updated} live prices updated from NSE`);
-  } catch (err) {
-    console.error('Live price fetch error:', err);
-    statusEl.className = 'live-status error';
-    statusEl.textContent = `⚠ Fetch failed: ${err.message}. Using last known prices.`;
-    toast('Could not fetch live prices — using cached data');
+    const arrMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!arrMatch) throw new Error('No JSON array found');
+    const items = JSON.parse(arrMatch[0]);
+    if (!items.length) throw new Error('No news items returned');
+    gridEl.innerHTML = items.map(item => {
+      const sentClass = item.sentiment === 'positive' ? 'news-pos' : item.sentiment === 'negative' ? 'news-neg' : 'news-neu';
+      const sentLabel = item.sentiment === 'positive' ? '▲ Positive' : item.sentiment === 'negative' ? '▼ Negative' : '● Neutral';
+      const tickerTags = (item.tickers||[]).filter(t => STOCKS.find(s=>s.ticker===t))
+        .map(t => `<span class="news-ticker-tag" onclick="showDetail('${t}')">${t}</span>`).join('');
+      return `<div class="news-card">
+        <div class="news-headline">${item.headline}<span class="news-sentiment ${sentClass}">${sentLabel}</span></div>
+        <div class="news-meta">${item.source || 'NSE News'} · ${item.date || 'Today'}</div>
+        <div class="news-summary">${item.summary}</div>
+        ${tickerTags ? `<div class="news-tickers">${tickerTags}</div>` : ''}
+      </div>`;
+    }).join('');
+    statusEl.textContent = `✓ ${items.length} news items loaded · ${new Date().toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
+    statusEl.style.color = 'var(--accent)';
+  } catch(err) {
+    statusEl.textContent = `⚠ Could not fetch news: ${err.message}`;
+    statusEl.style.color = 'var(--red)';
+    emptyEl.style.display = 'block';
   } finally {
-    isFetching = false;
+    newsFetching = false;
     btn.disabled = false;
     icon.innerHTML = '↻';
   }
 }
 
-// Auto-fetch on load
-setTimeout(() => fetchLivePrices(), 1500);
-// Auto-refresh every 5 minutes when market is open
-setInterval(() => {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
-  const day = now.getDay(), h = now.getHours(), m = now.getMinutes();
-  const isOpen = day >= 1 && day <= 5 && (h > 9 || (h === 9 && m >= 30)) && h < 15;
-  if (isOpen) fetchLivePrices();
-}, 5 * 60 * 1000);
+// ── KEYBOARD NAVIGATION ──────────────────────────────────────────
+let selectedRow = -1;
+function getVisibleRows() { return Array.from(document.querySelectorAll('#stock-tbody tr')); }
+function highlightRow(idx) {
+  const rows = getVisibleRows();
+  rows.forEach((r,i) => r.style.background = i===idx ? 'rgba(0,212,160,0.12)' : '');
+  selectedRow = idx;
+  if (rows[idx]) rows[idx].scrollIntoView({ block: 'nearest' });
+}
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'Escape') {
+    document.getElementById('detail-overlay').classList.remove('open');
+    document.getElementById('auth-modal').classList.remove('open');
+    return;
+  }
+  const activeTab = document.querySelector('.tab-content.active');
+  const isScreener = activeTab && activeTab.id === 'tab-screener';
+  if (!isScreener) return;
+  const rows = getVisibleRows();
+  if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); highlightRow(Math.min(selectedRow+1, rows.length-1)); }
+  else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); highlightRow(Math.max(selectedRow-1, 0)); }
+  else if (e.key === 'Enter' && selectedRow >= 0 && rows[selectedRow]) {
+    const ticker = rows[selectedRow].querySelector('.ticker-badge')?.textContent;
+    if (ticker) showDetail(ticker.trim());
+  }
+  else if (e.key === 'w' && selectedRow >= 0 && rows[selectedRow]) {
+    const ticker = rows[selectedRow].querySelector('.ticker-badge')?.textContent;
+    if (ticker) toggleWatch(ticker.trim());
+  }
+  else if (e.key === 'r') { e.preventDefault(); fetchLivePrices(); }
+});
 
-// ── CLOCK & MARKET STATUS ─────────────────────────────────────────
+// ── PASSWORD RESET (extend auth modal) ───────────────────────────
+async function sendPasswordReset() {
+  if (!firebaseReady) { toast('Firebase not configured'); return; }
+  const email = document.getElementById('auth-email')?.value?.trim();
+  if (!email) { toast('Enter your email first'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    toast('✓ Password reset email sent — check your inbox');
+  } catch(e) { toast('Reset failed: ' + e.message); }
+}
+
+// switchTab and renderPortfolio are patched inline below after declaration
+
+// ── INIT THEME ───────────────────────────────────────────────────
+initTheme();
 function updateClock(){
   const now=new Date();
   const eat=new Date(now.toLocaleString('en-US',{timeZone:'Africa/Nairobi'}));
