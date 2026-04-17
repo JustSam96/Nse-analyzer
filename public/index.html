@@ -1645,7 +1645,7 @@ async function fetchLivePrices() {
       console.log(`Total after African Financials: ${Object.keys(prices).length}`);
 
       // If we have a significant number of stocks, we can stop trying proxies
-      if (Object.keys(prices).length > 20) break; 
+      if (Object.keys(prices).length >= STOCKS.length) break; 
     } catch (e) {
       console.warn('Proxy/Source failed, trying next...', e);
     }
