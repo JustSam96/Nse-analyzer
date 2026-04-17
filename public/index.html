@@ -1266,7 +1266,6 @@ function renderPortfolio(){
   }).join('');
   
   // ... rest of the function (Total P&L and Summary)
-}
   tbody.innerHTML=rows;
   const totalPnl=totalMkt-totalBook;
   const totalPnlPct=totalBook>0?((totalPnl/totalBook)*100).toFixed(1):0;
