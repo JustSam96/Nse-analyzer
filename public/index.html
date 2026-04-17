@@ -1493,7 +1493,6 @@ async function scrapeKwayisi(proxyFn) {
   return prices;
 }
 
-// Scrapes the official Nairobi Securities Exchange website
 async function scrapeOfficialNSE(proxyFn) {
   const url = 'https://www.nse.co.ke/market-statistics/';
   const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
@@ -1501,8 +1500,6 @@ async function scrapeOfficialNSE(proxyFn) {
   
   const html = await res.text();
   const prices = {};
-  
-  // Targets the standard table row structure of the official NSE Market Statistics page
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
   
@@ -1515,62 +1512,58 @@ async function scrapeOfficialNSE(proxyFn) {
       cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
     }
 
-    // Official NSE table mapping: 1 is usually the Ticker, 2 is Price, 3 is Change
-    if (cells.length >= 3) {
-      const ticker = cells[1].toUpperCase().trim();
-      const price = parseFloat(cells[2].replace(/,/g, ''));
-      const change = parseFloat((cells[3] || '0').replace(/,/g, ''));
-
-      if (STOCKS.find(s => s.ticker === ticker) && !isNaN(price) && price > 0) {
-        const prev = price - change;
-        const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
-        prices[ticker] = { price, change, changePct };
-      }
-    }
-  }
-  return prices;
-}
-
-// africanfinancials.com — alternative NSE price table
-async function scrapeOfficialNSE(proxyFn) {
-  const url = 'https://www.nse.co.ke/market-statistics/';
-  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error('Official NSE HTTP ' + res.status);
-  
-  const html = await res.text();
-  const prices = {};
-  
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-  
-  let row;
-  while ((row = rowRe.exec(html)) !== null) {
-    const cells = [];
-    let cell;
-    const cellIter = new RegExp(cellRe.source, 'gi');
-    while ((cell = cellIter.exec(row[1])) !== null) {
-      cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
-    }
-
-    // Column 0: Company Name, Column 3: Price, Column 4: Change
     if (cells.length >= 4) {
       const rawName = cells[0].toUpperCase();
       const price = parseFloat(cells[3].replace(/,/g, ''));
       const change = parseFloat((cells[4] || '0').replace(/,/g, ''));
 
-      // MATCHING LOGIC: Find which ticker this row belongs to
       const stock = STOCKS.find(s => {
         const ticker = s.ticker.toUpperCase();
-        const shortName = s.name.toUpperCase().split(' ')[0]; // Matches first word like "EQUITY"
+        const shortName = s.name.toUpperCase().split(' ')[0];
         return rawName.includes(ticker) || rawName.includes(shortName);
       });
 
       if (stock && !isNaN(price) && price > 0) {
         const prev = price - change;
         const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
-        
-        // Save to the prices object using the Ticker as the key
         prices[stock.ticker] = { price, change, changePct };
+      }
+    }
+  }
+  return prices;
+}
+
+async function scrapeAfricanFinancials(proxyFn) {
+  const url = 'https://africanfinancials.com/nairobi-securities-exchange-kenya-share-prices/';
+  const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
+  if (!res.ok) throw new Error('AF HTTP ' + res.status);
+  const html = await res.text();
+  const prices = {};
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  let row;
+  while ((row = rowRe.exec(html)) !== null) {
+    const cells = [];
+    let cell;
+    const ci = new RegExp(cellRe.source, 'gi');
+    while ((cell = ci.exec(row[1])) !== null) {
+      cells.push(cell[1].replace(/<[^>]+>/g,'').trim());
+    }
+    for (let col = 0; col < Math.min(cells.length, 4); col++) {
+      const ticker = cells[col]?.toUpperCase()?.replace(/[^A-Z]/g,'');
+      if (ticker && STOCKS.find(s => s.ticker === ticker)) {
+        for (let pc = col+1; pc < cells.length; pc++) {
+          const price = parseFloat(cells[pc].replace(/,/g,''));
+          if (!isNaN(price) && price > 0.1) {
+            const changeRaw = parseFloat((cells[pc+1]||'').replace(/,/g,''));
+            const change = isNaN(changeRaw) ? 0 : changeRaw;
+            const prev = price - change;
+            const changePct = prev > 0 ? parseFloat(((change/prev)*100).toFixed(2)) : 0;
+            prices[ticker] = { price, change, changePct };
+            break;
+          }
+        }
+        break;
       }
     }
   }
