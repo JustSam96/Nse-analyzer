@@ -880,89 +880,79 @@ async function signOut() {
 
 // ── DATA — ALL NSE LISTED STOCKS ─────────────────────────────────
 const STOCKS = [
+  // AGRICULTURAL
+  {ticker:"EGAD", name:"Eaagads Ltd", sector:"Agriculture", price:34.15, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"KUKZ", name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.8, cons:6, payout:35, pe:10.5},
+  {ticker:"KAPC", name:"Kapchorua Tea Co.", sector:"Agriculture", price:237.00, yield:3.0, cons:4, payout:32, pe:11.0},
+  {ticker:"LIMT", name:"Limuru Tea Co.", sector:"Agriculture", price:519.00, yield:2.5, cons:5, payout:30, pe:14.0},
+  {ticker:"SASN", name:"Sasini Plc", sector:"Agriculture", price:26.40, yield:4.5, cons:5, payout:50, pe:9.0},
+  {ticker:"WTK",  name:"Williamson Tea Kenya", sector:"Agriculture", price:136.75, yield:3.2, cons:5, payout:30, pe:12.0},
+  
   // BANKING
-  {ticker:"EQTY", name:"Equity Group Holdings",       sector:"Banking",      price:52.00,  yield:4.2,  cons:8,  payout:35, pe:8.5},
-  {ticker:"KCB",  name:"KCB Group Plc",               sector:"Banking",      price:71.00,  yield:5.1,  cons:9,  payout:40, pe:6.8},
-  {ticker:"COOP", name:"Co-operative Bank of Kenya",  sector:"Banking",      price:15.50,  yield:10.4, cons:7,  payout:45, pe:5.2},
-  {ticker:"SCBK", name:"Standard Chartered Kenya",    sector:"Banking",      price:185.00, yield:15.1, cons:8,  payout:70, pe:9.1},
-  {ticker:"SBIC", name:"Stanbic Holdings",            sector:"Banking",      price:120.00, yield:11.5, cons:6,  payout:55, pe:7.3},
-  {ticker:"ABSA", name:"Absa Bank Kenya Plc",         sector:"Banking",      price:14.40,  yield:6.8,  cons:5,  payout:42, pe:6.1},
-  {ticker:"DTK",  name:"Diamond Trust Bank Kenya",    sector:"Banking",      price:60.00,  yield:3.0,  cons:6,  payout:30, pe:4.5},
-  {ticker:"HF",   name:"HF Group Plc",                sector:"Banking",      price:4.70,   yield:0.0,  cons:0,  payout:0,  pe:12.0},
-  {ticker:"NCBA", name:"NCBA Group Plc",              sector:"Banking",      price:47.00,  yield:7.2,  cons:4,  payout:38, pe:5.8},
-  {ticker:"NBK",  name:"National Bank of Kenya",      sector:"Banking",      price:9.50,   yield:0.0,  cons:0,  payout:0,  pe:18.0},
-  {ticker:"I&M",  name:"I&M Group Plc",               sector:"Banking",      price:24.50,  yield:6.0,  cons:5,  payout:35, pe:5.5},
-  {ticker:"CRED", name:"Credit Bank Plc",             sector:"Banking",      price:2.80,   yield:0.0,  cons:0,  payout:0,  pe:9.0},
-  {ticker:"GULF", name:"Gulf African Bank",           sector:"Banking",      price:3.20,   yield:0.0,  cons:0,  payout:0,  pe:10.0},
-  // TELECOM
-  {ticker:"SCOM", name:"Safaricom Plc",               sector:"Telecom",      price:30.70,  yield:7.5,  cons:10, payout:65, pe:14.2},
-  // CONSUMER GOODS / FOOD & BEVERAGE
-  {ticker:"BAT",  name:"BAT Kenya Plc",               sector:"Consumer",     price:430.00, yield:12.0, cons:12, payout:90, pe:11.0},
-  {ticker:"EABL", name:"East African Breweries",      sector:"Consumer",     price:175.00, yield:5.8,  cons:10, payout:75, pe:18.5},
-  {ticker:"UNGA", name:"Unga Group Plc",              sector:"Consumer",     price:25.00,  yield:4.0,  cons:4,  payout:40, pe:8.5},
-  {ticker:"HMPR", name:"Homa Bay Sugarcane Prods.",   sector:"Consumer",     price:3.10,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"EVRD", name:"Eveready East Africa",        sector:"Consumer",     price:1.00,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"ORCH", name:"Nairobi Business Ventures",   sector:"Consumer",     price:1.10,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  // UTILITIES
-  {ticker:"KPLC", name:"Kenya Power & Lighting",      sector:"Utilities",    price:5.70,   yield:3.5,  cons:3,  payout:30, pe:7.5},
-  {ticker:"KEGN", name:"KenGen",                      sector:"Utilities",    price:10.20,  yield:4.0,  cons:5,  payout:40, pe:8.0},
-  {ticker:"UMME", name:"Umeme Ltd",                   sector:"Utilities",    price:7.00,   yield:8.5,  cons:3,  payout:60, pe:6.0},
-  // ENERGY / OIL & GAS
-  {ticker:"TOTL", name:"TotalEnergies Kenya",         sector:"Energy",       price:32.00,  yield:6.2,  cons:8,  payout:60, pe:10.5},
-  {ticker:"KPC",  name:"Kenya Pipeline Company",      sector:"Energy",       price:9.30,   yield:4.0,  cons:1,  payout:35, pe:10.0},
-  {ticker:"KenolKobil",name:"Rubis Energy Kenya",     sector:"Energy",       price:18.00,  yield:3.5,  cons:3,  payout:30, pe:9.0},
+  {ticker:"ABSA", name:"Absa Bank Kenya", sector:"Banking", price:31.55, yield:6.8, cons:5, payout:42, pe:6.1},
+  {ticker:"BKGR", name:"BK Group Plc", sector:"Banking", price:53.50, yield:7.2, cons:4, payout:38, pe:5.8},
+  {ticker:"COOP", name:"Co-operative Bank", sector:"Banking", price:32.40, yield:10.4, cons:7, payout:45, pe:5.2},
+  {ticker:"DTK",  name:"Diamond Trust Bank", sector:"Banking", price:149.25, yield:3.0, cons:6, payout:30, pe:4.5},
+  {ticker:"EQTY", name:"Equity Group Holdings", sector:"Banking", price:74.75, yield:4.2, cons:8, payout:35, pe:8.5},
+  {ticker:"HFCK", name:"HF Group Plc", sector:"Banking", price:9.32, yield:0.0, cons:0, payout:0, pe:12.0},
+  {ticker:"IMHP", name:"I&M Group Plc", sector:"Banking", price:50.75, yield:6.0, cons:5, payout:35, pe:5.5},
+  {ticker:"KCB",  name:"KCB Group Plc", sector:"Banking", price:69.00, yield:5.1, cons:9, payout:40, pe:6.8},
+  {ticker:"NCBA", name:"NCBA Group Plc", sector:"Banking", price:90.00, yield:7.2, cons:4, payout:38, pe:5.8},
+  {ticker:"SBIC", name:"Stanbic Holdings", sector:"Banking", price:289.25, yield:11.5, cons:6, payout:55, pe:7.3},
+  {ticker:"SCBK", name:"Standard Chartered", sector:"Banking", price:360.25, yield:15.1, cons:8, payout:70, pe:9.1},
+
+  // COMMERCIAL AND SERVICES
+  {ticker:"DCON", name:"Deacons (East Africa)", sector:"Commercial", price:0.45, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"EVRD", name:"Eveready East Africa", sector:"Commercial", price:1.14, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"XPRS", name:"Express Kenya", sector:"Commercial", price:7.38, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"KQ",   name:"Kenya Airways", sector:"Commercial", price:7.48, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"LKL",  name:"Longhorn Publishers", sector:"Commercial", price:2.96, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"NBV",  name:"Nairobi Business Ventures", sector:"Commercial", price:1.44, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"NMG",  name:"Nation Media Group", sector:"Media", price:15.25, yield:6.0, cons:7, payout:55, pe:8.5},
+  {ticker:"SGL",  name:"Standard Group", sector:"Media", price:6.02, yield:5.0, cons:5, payout:50, pe:9.0},
+  {ticker:"TPSE", name:"TPS Eastern Africa", sector:"Commercial", price:16.70, yield:3.0, cons:3, payout:28, pe:14.0},
+  {ticker:"UCHM", name:"Uchumi Supermarkets", sector:"Commercial", price:1.91, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"SCAN", name:"WPP Scangroup", sector:"Commercial", price:2.35, yield:0.0, cons:0, payout:0, pe:0.0},
+
+  // CONSTRUCTION AND ALLIED
+  {ticker:"ARM",  name:"Athi River Mining", sector:"Construction", price:5.55, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"BAMB", name:"Bamburi Cement", sector:"Industrial", price:47.20, yield:8.0, cons:6, payout:65, pe:12.0},
+  {ticker:"CRWN", name:"Crown Paints Kenya", sector:"Industrial", price:59.00, yield:4.5, cons:5, payout:40, pe:10.0},
+  {ticker:"CABL", name:"East African Cables", sector:"Industrial", price:1.00, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"PORT", name:"E.A.Portland Cement", sector:"Construction", price:79.75, yield:0.0, cons:0, payout:0, pe:0.0},
+
+  // ENERGY AND PETROLEUM
+  {ticker:"KEGN", name:"KenGen", sector:"Utilities", price:9.32, yield:4.0, cons:5, payout:40, pe:8.0},
+  {ticker:"KPLC", name:"Kenya Power & Lighting", sector:"Utilities", price:16.95, yield:3.5, cons:3, payout:30, pe:7.5},
+  {ticker:"TOTL", name:"TotalEnergies Kenya", sector:"Energy", price:43.95, yield:6.2, cons:8, payout:60, pe:10.5},
+  {ticker:"UMME", name:"Umeme Ltd", sector:"Utilities", price:8.16, yield:8.5, cons:3, payout:60, pe:6.0},
+
   // INSURANCE
-  {ticker:"BRIT", name:"Britam Holdings",             sector:"Insurance",    price:8.50,   yield:3.2,  cons:4,  payout:30, pe:6.5},
-  {ticker:"JUB",  name:"Jubilee Holdings",            sector:"Insurance",    price:220.00, yield:3.8,  cons:7,  payout:40, pe:8.0},
-  {ticker:"LBTY", name:"Liberty Kenya Holdings",      sector:"Insurance",    price:5.70,   yield:2.0,  cons:3,  payout:25, pe:7.5},
-  {ticker:"PAFI", name:"Pan Africa Insurance Hldgs",  sector:"Insurance",    price:32.00,  yield:4.5,  cons:5,  payout:38, pe:8.0},
-  {ticker:"CIC",  name:"CIC Insurance Group",         sector:"Insurance",    price:2.80,   yield:2.5,  cons:3,  payout:28, pe:9.5},
-  {ticker:"KNRE", name:"Kenya Reinsurance Corp.",     sector:"Insurance",    price:2.50,   yield:4.0,  cons:5,  payout:40, pe:5.0},
-  {ticker:"OCIC", name:"Old Mutual Kenya",            sector:"Insurance",    price:7.20,   yield:3.0,  cons:3,  payout:30, pe:9.0},
-  // AGRICULTURE / AGRIBUSINESS
-  {ticker:"SASN", name:"Sasini Plc",                  sector:"Agriculture",  price:22.00,  yield:5.5,  cons:5,  payout:50, pe:9.0},
-  {ticker:"KAKZ", name:"Kakuzi Plc",                  sector:"Agriculture",  price:370.00, yield:3.5,  cons:6,  payout:35, pe:10.5},
-  {ticker:"REA",  name:"Rea Vipingo Plantations",     sector:"Agriculture",  price:21.50,  yield:6.0,  cons:4,  payout:55, pe:8.0},
-  {ticker:"TPSE", name:"Tilenergy Holdings",          sector:"Agriculture",  price:14.00,  yield:2.0,  cons:2,  payout:20, pe:12.0},
-  {ticker:"FTGH", name:"Flame Tree Group",            sector:"Agriculture",  price:1.14,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"LKPS", name:"Limuru Tea Plc",              sector:"Agriculture",  price:620.00, yield:2.5,  cons:5,  payout:30, pe:14.0},
-  {ticker:"KPTL", name:"Kapchorua Tea Plc",           sector:"Agriculture",  price:155.00, yield:3.0,  cons:4,  payout:32, pe:11.0},
-  {ticker:"EGAD", name:"Eliud Gachanga Group",        sector:"Agriculture",  price:3.00,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  // MEDIA
-  {ticker:"NMG",  name:"Nation Media Group",          sector:"Media",        price:18.00,  yield:6.0,  cons:7,  payout:55, pe:8.5},
-  {ticker:"STA",  name:"Standard Group Plc",          sector:"Media",        price:19.00,  yield:5.0,  cons:5,  payout:50, pe:9.0},
-  {ticker:"SCAN", name:"ScanGroup Plc",               sector:"Media",        price:11.50,  yield:4.0,  cons:4,  payout:45, pe:10.0},
-  // INVESTMENT / HOLDING COMPANIES
-  {ticker:"ICDC", name:"ICDCI",                       sector:"Investment",   price:85.00,  yield:4.5,  cons:6,  payout:45, pe:7.0},
-  {ticker:"AIMS", name:"African Industries Group",    sector:"Investment",   price:5.50,   yield:2.0,  cons:2,  payout:20, pe:11.0},
-  {ticker:"CTLG", name:"Centum Investment",           sector:"Investment",   price:13.00,  yield:0.0,  cons:1,  payout:0,  pe:5.0},
-  {ticker:"BLZE", name:"Baloobhai Patel",             sector:"Investment",   price:19.00,  yield:3.0,  cons:3,  payout:30, pe:8.0},
-  {ticker:"KWAL", name:"Kenya Wine Agencies",         sector:"Investment",   price:16.00,  yield:3.5,  cons:3,  payout:32, pe:9.0},
-  // INDUSTRIAL / CONSTRUCTION / MANUFACTURING
-  {ticker:"BAMB", name:"Bamburi Cement",              sector:"Industrial",   price:65.00,  yield:8.0,  cons:6,  payout:65, pe:12.0},
-  {ticker:"CABL", name:"East African Cables",         sector:"Industrial",   price:1.90,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"CRWN", name:"Crown Paints Kenya",          sector:"Industrial",   price:38.00,  yield:4.5,  cons:5,  payout:40, pe:10.0},
-  {ticker:"KBIL", name:"Kenya Buildcon",              sector:"Construction", price:10.00,  yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"BCOM", name:"B.O.C. Kenya Plc",            sector:"Manufacturing",price:115.00, yield:5.0,  cons:6,  payout:45, pe:9.5},
-  {ticker:"PORT", name:"East African Portland Cement",sector:"Construction", price:6.50,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"BERG", name:"Berger Paints Kenya",         sector:"Manufacturing",price:14.00,  yield:4.0,  cons:3,  payout:38, pe:11.0},
-  {ticker:"EVSG", name:"Eveready Group",              sector:"Manufacturing",price:1.40,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  // REAL ESTATE
-  {ticker:"HAFR", name:"Home Africa",                 sector:"Real Estate",  price:0.50,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"KURV", name:"Kurwitu Ventures",            sector:"Real Estate",  price:29.00,  yield:2.0,  cons:2,  payout:20, pe:20.0},
-  // AUTOMOBILE
-  {ticker:"CMCM", name:"CMC Holdings",                sector:"Automobile",   price:1.50,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"MMCE", name:"Marshalls East Africa",       sector:"Automobile",   price:14.00,  yield:3.0,  cons:2,  payout:28, pe:10.0},
-  // COMMERCIAL / SERVICES
-  {ticker:"KAMS", name:"Kapchorua Tea (Services)",    sector:"Commercial",   price:12.00,  yield:2.0,  cons:2,  payout:20, pe:9.0},
-  {ticker:"UNTD", name:"Unilever Kenya",              sector:"Commercial",   price:17.75,  yield:5.5,  cons:7,  payout:55, pe:16.0},
-  {ticker:"WPP",  name:"WPP Scangroup",               sector:"Commercial",   price:5.00,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"XPRS", name:"Express Kenya",               sector:"Commercial",   price:3.00,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"WLFD", name:"Williamson Tea",              sector:"Agriculture",  price:156.00, yield:3.2,  cons:5,  payout:30, pe:12.0},
-  {ticker:"UCHM", name:"Uchumi Supermarkets",         sector:"Commercial",   price:0.28,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"NAIB", name:"Nairobi Securities Exchange", sector:"Commercial",   price:13.50,  yield:5.0,  cons:4,  payout:48, pe:10.5},
-  {ticker:"SMER", name:"Sameer Africa Plc",           sector:"Commercial",   price:3.50,   yield:0.0,  cons:0,  payout:0,  pe:0.0},
-  {ticker:"TCL",  name:"TPS Eastern Africa",          sector:"Commercial",   price:17.00,  yield:3.0,  cons:3,  payout:28, pe:14.0},
+  {ticker:"BRIT", name:"Britam Holdings", sector:"Insurance", price:12.50, yield:3.2, cons:4, payout:30, pe:6.5},
+  {ticker:"CIC",  name:"CIC Insurance Group", sector:"Insurance", price:4.63, yield:2.5, cons:3, payout:28, pe:9.5},
+  {ticker:"JUB",  name:"Jubilee Holdings", sector:"Insurance", price:383.50, yield:3.8, cons:7, payout:40, pe:8.0},
+  {ticker:"KNRE", name:"Kenya Reinsurance", sector:"Insurance", price:3.36, yield:4.0, cons:5, payout:40, pe:5.0},
+  {ticker:"LBTY", name:"Liberty Kenya Holdings", sector:"Insurance", price:9.96, yield:2.0, cons:3, payout:25, pe:7.5},
+  {ticker:"SLAM", name:"Sanlam Allianz", sector:"Insurance", price:9.68, yield:4.5, cons:5, payout:38, pe:8.0},
+
+  // INVESTMENT
+  {ticker:"CTUM", name:"Centum Investment", sector:"Investment", price:14.05, yield:0.0, cons:1, payout:0, pe:5.0},
+  {ticker:"HAFR", name:"Home Afrika", sector:"Real Estate", price:1.45, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"KURV", name:"Kurwitu Ventures", sector:"Real Estate", price:1500.00, yield:2.0, cons:2, payout:20, pe:20.0},
+  {ticker:"OCH",  name:"Olympia Capital", sector:"Investment", price:7.88, yield:3.0, cons:3, payout:30, pe:8.0},
+  {ticker:"TCL",  name:"Trans-Century", sector:"Investment", price:0.71, yield:2.0, cons:2, payout:20, pe:11.0},
+  {ticker:"NSE",  name:"Nairobi Securities Exchange", sector:"Investment", price:20.40, yield:5.0, cons:4, payout:48, pe:10.5},
+
+  // MANUFACTURING AND ALLIED
+  {ticker:"BOC",  name:"B.O.C. Kenya", sector:"Manufacturing", price:133.75, yield:5.0, cons:6, payout:45, pe:9.5},
+  {ticker:"BAT",  name:"BAT Kenya", sector:"Consumer", price:569.00, yield:12.0, cons:12, payout:90, pe:11.0},
+  {ticker:"CARB", name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:3.5, cons:3, payout:32, pe:9.0},
+  {ticker:"EABL", name:"East African Breweries", sector:"Consumer", price:250.75, yield:5.8, cons:10, payout:75, pe:18.5},
+  {ticker:"FTGH", name:"Flame Tree Group", sector:"Manufacturing", price:2.38, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"UNGA", name:"Unga Group", sector:"Consumer", price:28.15, yield:4.0, cons:4, payout:40, pe:8.5},
+
+  // TELECOMMUNICATION
+  {ticker:"SCOM", name:"Safaricom Plc", sector:"Telecom", price:29.35, yield:7.5, cons:10, payout:65, pe:14.2},
 ];
 
 const DIVIDENDS = [
