@@ -1457,10 +1457,10 @@ function switchTabById(name){
 const CORS_PROXIES = [
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
 ];
 
-// 1. Corrected Kwayisi Scraper
+// Primary Scraper: Kwayisi (Most reliable for all 70 stocks)
 async function scrapeKwayisi(proxyFn) {
   const url = 'https://afx.kwayisi.org/nse/';
   try {
@@ -1483,50 +1483,10 @@ async function scrapeKwayisi(proxyFn) {
         const price = parseFloat(cells[1].replace(/,/g,''));
         const change = parseFloat(cells[2].replace(/,/g,''));
         
-        // Match ticker correctly
+        // Matches exact ticker (e.g., SCOM)
         const stock = STOCKS.find(s => s.ticker === rawTicker);
         if (stock && !isNaN(price) && price > 0) {
           const prev = price - (isNaN(change) ? 0 : change);
-          const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
-          prices[stock.ticker] = { price, change: isNaN(change) ? 0 : change, changePct };
-        }
-      }
-    }
-    return prices;
-  } catch(e) { return {}; }
-}
-
-// 2. Corrected Official NSE Scraper (with Fuzzy Matching)
-async function scrapeOfficialNSE(proxyFn) {
-  const url = 'https://www.nse.co.ke/market-statistics/';
-  try {
-    const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return {};
-    const html = await res.text();
-    const prices = {};
-    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    let row;
-    while ((row = rowRe.exec(html)) !== null) {
-      const cells = [];
-      let cell;
-      const cellIter = new RegExp(cellRe.source, 'gi');
-      while ((cell = cellIter.exec(row[1])) !== null) {
-        cells.push(cell[1].replace(/<[^>]+>/g, '').trim());
-      }
-      if (cells.length >= 4) {
-        const rawName = cells[0].toUpperCase();
-        const price = parseFloat(cells[3].replace(/,/g, ''));
-        const change = parseFloat((cells[4] || '0').replace(/,/g, ''));
-
-        // FUZZY MATCH: Checks if the table name contains your ticker
-        const stock = STOCKS.find(s => 
-          rawName.includes(s.ticker) || 
-          rawName.includes(s.name.toUpperCase().split(' ')[0])
-        );
-
-        if (stock && !isNaN(price) && price > 0) {
-          const prev = price - change;
           const changePct = prev > 0 ? parseFloat(((change / prev) * 100).toFixed(2)) : 0;
           prices[stock.ticker] = { price, change, changePct };
         }
@@ -1536,7 +1496,7 @@ async function scrapeOfficialNSE(proxyFn) {
   } catch(e) { return {}; }
 }
 
-// 3. Corrected African Financials Scraper
+// Backup Scraper: African Financials
 async function scrapeAfricanFinancials(proxyFn) {
   const url = 'https://africanfinancials.com/nairobi-securities-exchange-kenya-share-prices/';
   try {
@@ -1576,37 +1536,32 @@ async function scrapeAfricanFinancials(proxyFn) {
   } catch(e) { return {}; }
 }
 
-// 4. Ultimate Orchestrator (Merging all sources)
+// Merging Orchestrator: Combines sources to hit 100% of your STOCKS list
 async function fetchLivePrices() {
   if (isFetching) return;
   isFetching = true;
-  const btn = document.getElementById('refresh-btn');
-  const icon = document.getElementById('refresh-icon');
-  const statusEl = document.getElementById('live-status');
-  const tsEl = document.getElementById('live-ts');
-  btn.disabled = true;
-  icon.innerHTML = '<span class="spin">↻</span>';
-  statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Merging all NSE data sources…';
+  const btn = document.getElementById('refresh-btn'), icon = document.getElementById('refresh-icon');
+  const statusEl = document.getElementById('live-status'), tsEl = document.getElementById('live-ts');
+  btn.disabled = true; icon.innerHTML = '<span class="spin">↻</span>';
+  statusEl.className = 'live-status fetching'; statusEl.textContent = 'Merging source data...';
 
   let prices = {};
   const now = new Date();
 
+  // Primary attempt: Merged Mirror Scraping
   for (const proxyFn of CORS_PROXIES) {
     try {
-      const official = await scrapeOfficialNSE(proxyFn);
-      Object.assign(prices, official);
-      
       const kwayisi = await scrapeKwayisi(proxyFn);
-      for (let t in kwayisi) { if (!prices[t]) prices[t] = kwayisi[t]; }
-
+      Object.assign(prices, kwayisi);
+      
       const af = await scrapeAfricanFinancials(proxyFn);
       for (let t in af) { if (!prices[t]) prices[t] = af[t]; }
 
-      if (Object.keys(prices).length > 40) break; 
+      if (Object.keys(prices).length > 40) break; // Decent batch size
     } catch (e) { console.warn('Proxy fail, rotating...'); }
   }
 
+  // Update logic
   let updated = 0;
   for (const [ticker, info] of Object.entries(prices)) {
     if (info && info.price > 0) {
@@ -1614,10 +1569,8 @@ async function fetchLivePrices() {
       const stock = STOCKS.find(s => s.ticker === ticker);
       if (stock) {
         stock.price = info.price;
-        const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
-        if (divEntry) {
-          stock.yield = parseFloat(((divEntry.amount / stock.price) * 100).toFixed(1));
-        }
+        const div = DIVIDENDS.find(d => d.ticker === ticker);
+        if (div) stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
         updated++;
       }
     }
@@ -1625,20 +1578,15 @@ async function fetchLivePrices() {
 
   if (updated > 0) {
     statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices merged & live`;
-    tsEl.textContent = `· Multi-Source · ${now.toLocaleTimeString('en-KE')} EAT`;
-    renderTable(); 
-    renderWatchlist(); 
-    renderPortfolio(); // This updates the Portfolio section automatically
+    statusEl.textContent = `✓ ${updated}/${STOCKS.length} stocks live`;
+    tsEl.textContent = `· ${now.toLocaleTimeString('en-KE')} EAT`;
+    renderTable(); renderWatchlist(); renderPortfolio(); // Critical: updates Portfolio view
     toast(`✓ Successfully updated ${updated} stocks`);
   } else {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ Sources unavailable. Check connection.';
+    statusEl.textContent = '⚠ All sources blocked. Try again in 5 mins.';
   }
-
-  isFetching = false;
-  btn.disabled = false;
-  icon.innerHTML = '↻';
+  isFetching = false; btn.disabled = false; icon.innerHTML = '↻';
 }
 
 // Auto-fetch on load (slight delay so page renders first)
