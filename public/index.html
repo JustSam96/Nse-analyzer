@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NSE Dividend Dashboard v6</title>
+<title>NSE Dividend Dashboard v7</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase -->
 <style>
@@ -336,12 +336,46 @@ body.light select, body.light .form-group select, body.light .form-group input {
 
 <!-- METRICS -->
 <div class="metrics">
-  <div class="metric"><div class="metric-label">NSE 20 Index</div><div class="metric-value" style="color:#e8f0f8;">3,588</div><div class="metric-sub down">-0.07% today</div></div>
-  <div class="metric"><div class="metric-label">Market Cap</div><div class="metric-value" style="color:#e8f0f8;">3.44T</div><div class="metric-sub" style="color:var(--muted);">KES Total</div></div>
-  <div class="metric"><div class="metric-label">Buy Signals</div><div class="metric-value up" id="m-buys">—</div><div class="metric-sub" style="color:var(--muted);">From screener</div></div>
-  <div class="metric"><div class="metric-label">Watchlist</div><div class="metric-value gold" id="m-watch">0</div><div class="metric-sub" style="color:var(--muted);">Stocks tracked</div></div>
-  <div class="metric"><div class="metric-label">Portfolio Value</div><div class="metric-value up" id="m-portval">KES 0</div><div class="metric-sub up" id="m-portpnl">—</div></div>
-  <div class="metric"><div class="metric-label">Active Alerts</div><div class="metric-value gold" id="m-alerts">0</div><div class="metric-sub" style="color:var(--muted);">Price watchers</div></div>
+  <div class="metric">
+    <div class="metric-label">NSE 20 Index</div>
+    <div class="metric-value" id="m-nse20" style="color:#e8f0f8;">3,588</div>
+    <div class="metric-sub" id="m-nse20-chg" style="color:var(--muted);">—</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Market Cap</div>
+    <div class="metric-value" id="m-mktcap" style="color:#e8f0f8;">3.44T</div>
+    <div class="metric-sub" id="m-mktcap-chg" style="color:var(--muted);">KES Total</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Buy Signals</div>
+    <div class="metric-value up" id="m-buys">—</div>
+    <div class="metric-sub" style="color:var(--muted);">From screener</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Watchlist</div>
+    <div class="metric-value gold" id="m-watch">0</div>
+    <div class="metric-sub" style="color:var(--muted);">Stocks tracked</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Portfolio Value</div>
+    <div class="metric-value up" id="m-portval">KES 0</div>
+    <div class="metric-sub" id="m-portpnl" style="color:var(--muted);">—</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Active Alerts</div>
+    <div class="metric-value gold" id="m-alerts">0</div>
+    <div class="metric-sub" style="color:var(--muted);">Price watchers</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Avg Dividend Yield</div>
+    <div class="metric-value up" id="m-avgyield">—</div>
+    <div class="metric-sub" style="color:var(--muted);">Paying stocks</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Top Gainer Today</div>
+    <div class="metric-value" id="m-gainer" style="color:var(--accent);">—</div>
+    <div class="metric-sub" id="m-gainer-pct" style="color:var(--muted);">—</div>
+  </div>
 </div>
 
 <!-- TABS -->
@@ -733,13 +767,27 @@ function setSyncIndicator(state) {
 
 async function saveToCloud(data) {
   if (!currentUser || !db) return;
+  // Never push an all-empty payload — it would erase the user's cloud data
+  const hasData = (data.watchlist && data.watchlist.length > 0) ||
+                  (data.portfolio && data.portfolio.length > 0) ||
+                  (data.alerts    && data.alerts.length    > 0);
+  if (!hasData && !data.cfg) return;
   setSyncIndicator('syncing');
   try {
-    await db.collection('users').doc(currentUser.uid).set(data, { merge: true });
+    // Use set+merge so we never accidentally delete fields we didn't include
+    await db.collection('users').doc(currentUser.uid).set({
+      watchlist: data.watchlist || [],
+      portfolio: data.portfolio || [],
+      alerts:    data.alerts    || [],
+      cfg:       data.cfg       || CFG,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
     setSyncIndicator('synced');
   } catch(e) {
-    console.error('Cloud save error:', e);
+    console.error('Cloud save error:', e.code, e.message);
     setSyncIndicator('error');
+    // Surface the error in the UI so user knows
+    toast('⚠ Cloud sync failed: ' + (e.code || e.message));
   }
 }
 
@@ -747,16 +795,27 @@ function subscribeToCloud() {
   if (!currentUser || !db) return;
   setSyncIndicator('syncing');
   firestoreUnsubscribe = db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
+    // Set the loading guard so save() doesn't echo cloud data straight back
+    _isLoadingFromCloud = true;
     if (doc.exists) {
       const d = doc.data();
-      if (d.watchlist) watchlist = d.watchlist;
-      if (d.portfolio) portfolio = d.portfolio;
-      if (d.alerts) alerts = d.alerts;
-      if (d.cfg) CFG = Object.assign(CFG, d.cfg);
+      // Only replace local data if cloud has non-empty arrays (prevents wipe on first sign-in)
+      if (Array.isArray(d.watchlist) && d.watchlist.length > 0) watchlist = d.watchlist;
+      if (Array.isArray(d.portfolio) && d.portfolio.length > 0) portfolio = d.portfolio;
+      if (Array.isArray(d.alerts)    && d.alerts.length    > 0) alerts    = d.alerts;
+      if (d.cfg && typeof d.cfg === 'object') CFG = Object.assign({}, CFG, d.cfg);
+      // Re-sync localStorage to match cloud
+      try {
+        localStorage.setItem('nse_watch',  JSON.stringify(watchlist));
+        localStorage.setItem('nse_port',   JSON.stringify(portfolio));
+        localStorage.setItem('nse_alerts', JSON.stringify(alerts));
+      } catch(e) {}
       renderTable(); renderWatchlist(); renderCalendar(); renderPortfolio(); renderAlerts(); initSettings();
     }
     setSyncIndicator('synced');
-  }, err => { console.error(err); setSyncIndicator('error'); });
+    // Release the guard after a short delay so any in-flight renders finish first
+    setTimeout(() => { _isLoadingFromCloud = false; }, 500);
+  }, err => { console.error('Firestore snapshot error:', err); setSyncIndicator('error'); _isLoadingFromCloud = false; });
 }
 
 function updateAccountUI() {
@@ -879,120 +938,122 @@ async function signOut() {
 }
 
 // ── DATA — ALL NSE LISTED STOCKS ─────────────────────────────────
+// shares: issued shares in millions (used for market cap calculation)
+// basePrice: price at dashboard load — used to compute index change vs base
 const STOCKS = [
   // AGRICULTURAL
-  {ticker:"EGAD", name:"Eaagads Ltd", sector:"Agriculture", price:34.15, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"KUKZ", name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.8, cons:6, payout:35, pe:10.5},
-  {ticker:"KAPC", name:"Kapchorua Tea Co.", sector:"Agriculture", price:237.00, yield:3.0, cons:4, payout:32, pe:11.0},
-  {ticker:"LIMT", name:"Limuru Tea Co.", sector:"Agriculture", price:519.00, yield:2.5, cons:5, payout:30, pe:14.0},
-  {ticker:"SASN", name:"Sasini Plc", sector:"Agriculture", price:26.40, yield:4.5, cons:5, payout:50, pe:9.0},
-  {ticker:"WTK",  name:"Williamson Tea Kenya", sector:"Agriculture", price:136.75, yield:3.2, cons:5, payout:30, pe:12.0},
+  {ticker:"EGAD",name:"Eaagads Ltd", sector:"Agriculture", price:34.15, yield:0.0, cons:0, payout:0, pe:0.0, shares:3.0},
+  {ticker:"KUKZ",name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.8, cons:6, payout:35, pe:10.5, shares:19.6},
+  {ticker:"KAPC",name:"Kapchorua Tea Co.", sector:"Agriculture", price:237.00, yield:3.0, cons:4, payout:32, pe:11.0, shares:7.7},
+  {ticker:"LIMT",name:"Limuru Tea Co.", sector:"Agriculture", price:519.00, yield:2.5, cons:5, payout:30, pe:14.0, shares:1.2},
+  {ticker:"SASN",name:"Sasini Plc", sector:"Agriculture", price:26.40, yield:4.5, cons:5, payout:50, pe:9.0, shares:187.5},
+  {ticker:"WTK",name:"Williamson Tea Kenya", sector:"Agriculture", price:136.75, yield:3.2, cons:5, payout:30, pe:12.0, shares:19.5},
   
   // BANKING
-  {ticker:"ABSA", name:"Absa Bank Kenya", sector:"Banking", price:31.55, yield:6.8, cons:5, payout:42, pe:6.1},
-  {ticker:"BKGR", name:"BK Group Plc", sector:"Banking", price:53.50, yield:7.2, cons:4, payout:38, pe:5.8},
-  {ticker:"COOP", name:"Co-operative Bank", sector:"Banking", price:32.40, yield:10.4, cons:7, payout:45, pe:5.2},
-  {ticker:"DTK",  name:"Diamond Trust Bank", sector:"Banking", price:149.25, yield:3.0, cons:6, payout:30, pe:4.5},
-  {ticker:"EQTY", name:"Equity Group Holdings", sector:"Banking", price:74.75, yield:4.2, cons:8, payout:35, pe:8.5},
-  {ticker:"HFCK", name:"HF Group Plc", sector:"Banking", price:9.32, yield:0.0, cons:0, payout:0, pe:12.0},
-  {ticker:"IMHP", name:"I&M Group Plc", sector:"Banking", price:50.75, yield:6.0, cons:5, payout:35, pe:5.5},
-  {ticker:"KCB",  name:"KCB Group Plc", sector:"Banking", price:69.00, yield:5.1, cons:9, payout:40, pe:6.8},
-  {ticker:"NCBA", name:"NCBA Group Plc", sector:"Banking", price:90.00, yield:7.2, cons:4, payout:38, pe:5.8},
-  {ticker:"SBIC", name:"Stanbic Holdings", sector:"Banking", price:289.25, yield:11.5, cons:6, payout:55, pe:7.3},
-  {ticker:"SCBK", name:"Standard Chartered", sector:"Banking", price:360.25, yield:15.1, cons:8, payout:70, pe:9.1},
+  {ticker:"ABSA",name:"Absa Bank Kenya", sector:"Banking", price:31.55, yield:6.8, cons:5, payout:42, pe:6.1, shares:5476.4},
+  {ticker:"BKGR",name:"BK Group Plc", sector:"Banking", price:53.50, yield:7.2, cons:4, payout:38, pe:5.8, shares:1200.0},
+  {ticker:"COOP",name:"Co-operative Bank", sector:"Banking", price:32.40, yield:10.4, cons:7, payout:45, pe:5.2, shares:5876.7},
+  {ticker:"DTK",name:"Diamond Trust Bank", sector:"Banking", price:149.25, yield:3.0, cons:6, payout:30, pe:4.5, shares:225.0},
+  {ticker:"EQTY",name:"Equity Group Holdings", sector:"Banking", price:74.75, yield:4.2, cons:8, payout:35, pe:8.5, shares:3773.7},
+  {ticker:"HFCK",name:"HF Group Plc", sector:"Banking", price:9.32, yield:0.0, cons:0, payout:0, pe:12.0, shares:432.5},
+  {ticker:"IMHP",name:"I&M Group Plc", sector:"Banking", price:50.75, yield:6.0, cons:5, payout:35, pe:5.5, shares:813.7},
+  {ticker:"KCB",name:"KCB Group Plc", sector:"Banking", price:69.00, yield:5.1, cons:9, payout:40, pe:6.8, shares:3205.7},
+  {ticker:"NCBA",name:"NCBA Group Plc", sector:"Banking", price:90.00, yield:7.2, cons:4, payout:38, pe:5.8, shares:1632.4},
+  {ticker:"SBIC",name:"Stanbic Holdings", sector:"Banking", price:289.25, yield:11.5, cons:6, payout:55, pe:7.3, shares:396.8},
+  {ticker:"SCBK",name:"Standard Chartered", sector:"Banking", price:360.25, yield:15.1, cons:8, payout:70, pe:9.1, shares:369.3},
 
   // COMMERCIAL AND SERVICES
-  {ticker:"DCON", name:"Deacons (East Africa)", sector:"Commercial", price:0.45, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"EVRD", name:"Eveready East Africa", sector:"Commercial", price:1.14, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"XPRS", name:"Express Kenya", sector:"Commercial", price:7.38, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"KQ",   name:"Kenya Airways", sector:"Commercial", price:7.48, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"LKL",  name:"Longhorn Publishers", sector:"Commercial", price:2.96, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"NBV",  name:"Nairobi Business Ventures", sector:"Commercial", price:1.44, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"NMG",  name:"Nation Media Group", sector:"Media", price:15.25, yield:6.0, cons:7, payout:55, pe:8.5},
-  {ticker:"SGL",  name:"Standard Group", sector:"Media", price:6.02, yield:5.0, cons:5, payout:50, pe:9.0},
-  {ticker:"TPSE", name:"TPS Eastern Africa", sector:"Commercial", price:16.70, yield:3.0, cons:3, payout:28, pe:14.0},
-  {ticker:"UCHM", name:"Uchumi Supermarkets", sector:"Commercial", price:1.91, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"SCAN", name:"WPP Scangroup", sector:"Commercial", price:2.35, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"CARB", name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:5.8, cons:4, payout:40, pe:8.0},
-  {ticker:"LONG", name:"Longhorn Publishers", sector:"Commercial", price:2.30, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"KUKZ", name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.5, cons:6, payout:35, pe:10.5},
+  {ticker:"DCON",name:"Deacons (East Africa)", sector:"Commercial", price:0.45, yield:0.0, cons:0, payout:0, pe:0.0, shares:103.0},
+  {ticker:"EVRD",name:"Eveready East Africa", sector:"Commercial", price:1.14, yield:0.0, cons:0, payout:0, pe:0.0, shares:261.9},
+  {ticker:"XPRS",name:"Express Kenya", sector:"Commercial", price:7.38, yield:0.0, cons:0, payout:0, pe:0.0, shares:25.0},
+  {ticker:"KQ",name:"Kenya Airways", sector:"Commercial", price:7.48, yield:0.0, cons:0, payout:0, pe:0.0, shares:17014.0},
+  {ticker:"LKL",name:"Longhorn Publishers", sector:"Commercial", price:2.96, yield:0.0, cons:0, payout:0, pe:0.0, shares:204.0},
+  {ticker:"NBV",name:"Nairobi Business Ventures", sector:"Commercial", price:1.44, yield:0.0, cons:0, payout:0, pe:0.0, shares:225.0},
+  {ticker:"NMG",name:"Nation Media Group", sector:"Media", price:15.25, yield:6.0, cons:7, payout:55, pe:8.5, shares:188.5},
+  {ticker:"SGL",name:"Standard Group", sector:"Media", price:6.02, yield:5.0, cons:5, payout:50, pe:9.0, shares:394.5},
+  {ticker:"TPSE",name:"TPS Eastern Africa", sector:"Commercial", price:16.70, yield:3.0, cons:3, payout:28, pe:14.0, shares:143.3},
+  {ticker:"UCHM",name:"Uchumi Supermarkets", sector:"Commercial", price:1.91, yield:0.0, cons:0, payout:0, pe:0.0, shares:375.0},
+  {ticker:"SCAN",name:"WPP Scangroup", sector:"Commercial", price:2.35, yield:0.0, cons:0, payout:0, pe:0.0, shares:623.8},
+  {ticker:"CARB",name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:5.8, cons:4, payout:40, pe:8.0, shares:200.0},
+  {ticker:"LONG",name:"Longhorn Publishers", sector:"Commercial", price:2.30, yield:0.0, cons:0, payout:0, pe:0.0, shares:204.0},
+  {ticker:"KUKZ",name:"Kakuzi Plc", sector:"Agriculture", price:419.50, yield:3.5, cons:6, payout:35, pe:10.5, shares:19.6},
 
   // CONSTRUCTION AND ALLIED
-  {ticker:"ARM",  name:"Athi River Mining", sector:"Construction", price:5.55, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"BAMB", name:"Bamburi Cement", sector:"Industrial", price:47.20, yield:8.0, cons:6, payout:65, pe:12.0},
-  {ticker:"CRWN", name:"Crown Paints Kenya", sector:"Industrial", price:59.00, yield:4.5, cons:5, payout:40, pe:10.0},
-  {ticker:"CABL", name:"East African Cables", sector:"Industrial", price:1.00, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"PORT", name:"E.A.Portland Cement", sector:"Construction", price:79.75, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"ARM",name:"Athi River Mining", sector:"Construction", price:5.55, yield:0.0, cons:0, payout:0, pe:0.0, shares:386.4},
+  {ticker:"BAMB",name:"Bamburi Cement", sector:"Industrial", price:47.20, yield:8.0, cons:6, payout:65, pe:12.0, shares:362.9},
+  {ticker:"CRWN",name:"Crown Paints Kenya", sector:"Industrial", price:59.00, yield:4.5, cons:5, payout:40, pe:10.0, shares:163.3},
+  {ticker:"CABL",name:"East African Cables", sector:"Industrial", price:1.00, yield:0.0, cons:0, payout:0, pe:0.0, shares:253.5},
+  {ticker:"PORT",name:"E.A.Portland Cement", sector:"Construction", price:79.75, yield:0.0, cons:0, payout:0, pe:0.0, shares:181.9},
 
   // ENERGY AND PETROLEUM
-  {ticker:"KEGN", name:"KenGen", sector:"Utilities", price:9.32, yield:4.0, cons:5, payout:40, pe:8.0},
-  {ticker:"KPLC", name:"Kenya Power & Lighting", sector:"Utilities", price:16.95, yield:3.5, cons:3, payout:30, pe:7.5},
-  {ticker:"TOTL", name:"TotalEnergies Kenya", sector:"Energy", price:43.95, yield:6.2, cons:8, payout:60, pe:10.5},
-  {ticker:"UMME", name:"Umeme Ltd", sector:"Utilities", price:8.16, yield:8.5, cons:3, payout:60, pe:6.0},
+  {ticker:"KEGN",name:"KenGen", sector:"Utilities", price:9.32, yield:4.0, cons:5, payout:40, pe:8.0, shares:3960.7},
+  {ticker:"KPLC",name:"Kenya Power & Lighting", sector:"Utilities", price:16.95, yield:3.5, cons:3, payout:30, pe:7.5, shares:1951.5},
+  {ticker:"TOTL",name:"TotalEnergies Kenya", sector:"Energy", price:43.95, yield:6.2, cons:8, payout:60, pe:10.5, shares:105.1},
+  {ticker:"UMME",name:"Umeme Ltd", sector:"Utilities", price:8.16, yield:8.5, cons:3, payout:60, pe:6.0, shares:1623.9},
 
   // INSURANCE
-  {ticker:"BRIT", name:"Britam Holdings", sector:"Insurance", price:12.50, yield:3.2, cons:4, payout:30, pe:6.5},
-  {ticker:"CIC",  name:"CIC Insurance Group", sector:"Insurance", price:4.63, yield:2.5, cons:3, payout:28, pe:9.5},
-  {ticker:"JUB",  name:"Jubilee Holdings", sector:"Insurance", price:383.50, yield:3.8, cons:7, payout:40, pe:8.0},
-  {ticker:"KNRE", name:"Kenya Reinsurance", sector:"Insurance", price:3.36, yield:4.0, cons:5, payout:40, pe:5.0},
-  {ticker:"LBTY", name:"Liberty Kenya Holdings", sector:"Insurance", price:9.96, yield:2.0, cons:3, payout:25, pe:7.5},
-  {ticker:"SLAM", name:"Sanlam Allianz", sector:"Insurance", price:9.68, yield:4.5, cons:5, payout:38, pe:8.0},
+  {ticker:"BRIT",name:"Britam Holdings", sector:"Insurance", price:12.50, yield:3.2, cons:4, payout:30, pe:6.5, shares:2749.4},
+  {ticker:"CIC",name:"CIC Insurance Group", sector:"Insurance", price:4.63, yield:2.5, cons:3, payout:28, pe:9.5, shares:3000.0},
+  {ticker:"JUB",name:"Jubilee Holdings", sector:"Insurance", price:383.50, yield:3.8, cons:7, payout:40, pe:8.0, shares:90.0},
+  {ticker:"KNRE",name:"Kenya Reinsurance", sector:"Insurance", price:3.36, yield:4.0, cons:5, payout:40, pe:5.0, shares:1513.5},
+  {ticker:"LBTY",name:"Liberty Kenya Holdings", sector:"Insurance", price:9.96, yield:2.0, cons:3, payout:25, pe:7.5, shares:751.9},
+  {ticker:"SLAM",name:"Sanlam Allianz", sector:"Insurance", price:9.68, yield:4.5, cons:5, payout:38, pe:8.0, shares:718.0},
 
   // INVESTMENT
-  {ticker:"CTUM", name:"Centum Investment", sector:"Investment", price:14.05, yield:0.0, cons:1, payout:0, pe:5.0},
-  {ticker:"HAFR", name:"Home Afrika", sector:"Real Estate", price:1.45, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"KURV", name:"Kurwitu Ventures", sector:"Real Estate", price:1500.00, yield:2.0, cons:2, payout:20, pe:20.0},
-  {ticker:"OCH",  name:"Olympia Capital", sector:"Investment", price:7.88, yield:3.0, cons:3, payout:30, pe:8.0},
-  {ticker:"TCL",  name:"Trans-Century", sector:"Investment", price:0.71, yield:2.0, cons:2, payout:20, pe:11.0},
-  {ticker:"NSE",  name:"Nairobi Securities Exchange", sector:"Investment", price:20.40, yield:5.0, cons:4, payout:48, pe:10.5},
-  {ticker:"ILAM", name:"ILAM Fahari I-REIT", sector:"Real Estate", price:6.20, yield:8.0, cons:3, payout:90, pe:12.0},
-  {ticker:"LHL",  name:"Liberty Kenya Holdings", sector:"Insurance", price:5.40, yield:0.0, cons:2, payout:0, pe:7.0},
-  {ticker:"OCH",  name:"Olympia Capital", sector:"Investment", price:3.10, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"TCL",  name:"Trans-Century Plc", sector:"Investment", price:0.55, yield:0.0, cons:0, payout:0, pe:0.0},
+  {ticker:"CTUM",name:"Centum Investment", sector:"Investment", price:14.05, yield:0.0, cons:1, payout:0, pe:5.0, shares:665.5},
+  {ticker:"HAFR",name:"Home Afrika", sector:"Real Estate", price:1.45, yield:0.0, cons:0, payout:0, pe:0.0, shares:1600.0},
+  {ticker:"KURV",name:"Kurwitu Ventures", sector:"Real Estate", price:1500.00, yield:2.0, cons:2, payout:20, pe:20.0, shares:0.8},
+  {ticker:"OCH",name:"Olympia Capital", sector:"Investment", price:7.88, yield:3.0, cons:3, payout:30, pe:8.0, shares:237.5},
+  {ticker:"TCL",name:"Trans-Century", sector:"Investment", price:0.71, yield:2.0, cons:2, payout:20, pe:11.0, shares:1538.8},
+  {ticker:"NSE",name:"Nairobi Securities Exchange", sector:"Investment", price:20.40, yield:5.0, cons:4, payout:48, pe:10.5, shares:189.4},
+  {ticker:"ILAM",name:"ILAM Fahari I-REIT", sector:"Real Estate", price:6.20, yield:8.0, cons:3, payout:90, pe:12.0, shares:375.0},
+  {ticker:"LHL",name:"Liberty Kenya Holdings", sector:"Insurance", price:5.40, yield:0.0, cons:2, payout:0, pe:7.0, shares:751.9},
+  {ticker:"OCH",name:"Olympia Capital", sector:"Investment", price:3.10, yield:0.0, cons:0, payout:0, pe:0.0, shares:237.5},
+  {ticker:"TCL",name:"Trans-Century Plc", sector:"Investment", price:0.55, yield:0.0, cons:0, payout:0, pe:0.0, shares:1538.8},
 
   // MANUFACTURING AND ALLIED
-  {ticker:"BOC",  name:"B.O.C. Kenya", sector:"Manufacturing", price:133.75, yield:5.0, cons:6, payout:45, pe:9.5},
-  {ticker:"BAT",  name:"BAT Kenya", sector:"Consumer", price:569.00, yield:12.0, cons:12, payout:90, pe:11.0},
-  {ticker:"CARB", name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:3.5, cons:3, payout:32, pe:9.0},
-  {ticker:"EABL", name:"East African Breweries", sector:"Consumer", price:250.75, yield:5.8, cons:10, payout:75, pe:18.5},
-  {ticker:"FTGH", name:"Flame Tree Group", sector:"Manufacturing", price:2.38, yield:0.0, cons:0, payout:0, pe:0.0},
-  {ticker:"UNGA", name:"Unga Group", sector:"Consumer", price:28.15, yield:4.0, cons:4, payout:40, pe:8.5},
+  {ticker:"BOC",name:"B.O.C. Kenya", sector:"Manufacturing", price:133.75, yield:5.0, cons:6, payout:45, pe:9.5, shares:19.0},
+  {ticker:"BAT",name:"BAT Kenya", sector:"Consumer", price:569.00, yield:12.0, cons:12, payout:90, pe:11.0, shares:100.0},
+  {ticker:"CARB",name:"Carbacid Investments", sector:"Manufacturing", price:29.50, yield:3.5, cons:3, payout:32, pe:9.0, shares:200.0},
+  {ticker:"EABL",name:"East African Breweries", sector:"Consumer", price:250.75, yield:5.8, cons:10, payout:75, pe:18.5, shares:790.7},
+  {ticker:"FTGH",name:"Flame Tree Group", sector:"Manufacturing", price:2.38, yield:0.0, cons:0, payout:0, pe:0.0, shares:1509.3},
+  {ticker:"UNGA",name:"Unga Group", sector:"Consumer", price:28.15, yield:4.0, cons:4, payout:40, pe:8.5, shares:91.6},
 
   // TELECOMMUNICATION
-  {ticker:"SCOM", name:"Safaricom Plc", sector:"Telecom", price:29.35, yield:7.5, cons:10, payout:65, pe:14.2},
+  {ticker:"SCOM",name:"Safaricom Plc", sector:"Telecom", price:29.35, yield:7.5, cons:10, payout:65, pe:14.2, shares:40065.4},
 ];
 
 const DIVIDENDS = [
-  {ticker:"SCBK",name:"Standard Chartered Kenya",exDate:"2026-04-25",payDate:"2026-05-15",amount:28.00,type:"Final"},
-  {ticker:"SCOM",name:"Safaricom Plc",           exDate:"2026-04-30",payDate:"2026-05-20",amount:1.10, type:"Final"},
-  {ticker:"ABSA",name:"Absa Bank Kenya",         exDate:"2026-05-01",payDate:"2026-05-20",amount:0.98, type:"Final"},
-  {ticker:"EQTY",name:"Equity Group Holdings",   exDate:"2026-05-08",payDate:"2026-05-28",amount:4.25, type:"Final"},
-  {ticker:"KCB", name:"KCB Group Plc",           exDate:"2026-05-12",payDate:"2026-06-01",amount:3.00, type:"Final"},
-  {ticker:"BAT", name:"BAT Kenya Plc",           exDate:"2026-05-20",payDate:"2026-06-10",amount:52.00,type:"Final"},
-  {ticker:"NCBA",name:"NCBA Group",              exDate:"2026-05-22",payDate:"2026-06-10",amount:3.40, type:"Final"},
-  {ticker:"COOP",name:"Co-operative Bank",       exDate:"2026-06-02",payDate:"2026-06-20",amount:1.50, type:"Final"},
-  {ticker:"SBIC",name:"Stanbic Holdings",        exDate:"2026-06-10",payDate:"2026-06-30",amount:14.00,type:"Final"},
-  {ticker:"I&M", name:"I&M Group",               exDate:"2026-06-15",payDate:"2026-07-03",amount:1.47, type:"Final"},
-  {ticker:"DTK", name:"Diamond Trust Bank",      exDate:"2026-06-20",payDate:"2026-07-08",amount:1.80, type:"Final"},
-  {ticker:"EABL",name:"East African Breweries",  exDate:"2026-07-05",payDate:"2026-07-25",amount:4.00, type:"Interim"},
-  {ticker:"KPLC",name:"Kenya Power & Lighting",  exDate:"2026-07-15",payDate:"2026-08-04",amount:0.20, type:"Final"},
-  {ticker:"TOTL",name:"TotalEnergies Kenya",     exDate:"2026-07-22",payDate:"2026-08-11",amount:2.00, type:"Final"},
-  {ticker:"KEGN",name:"KenGen",                  exDate:"2026-08-10",payDate:"2026-08-28",amount:0.40, type:"Final"},
-  {ticker:"BAMB",name:"Bamburi Cement",          exDate:"2026-08-18",payDate:"2026-09-05",amount:5.20, type:"Final"},
-  {ticker:"NMG", name:"Nation Media Group",      exDate:"2026-09-05",payDate:"2026-09-22",amount:1.10, type:"Interim"},
-  {ticker:"SASN",name:"Sasini Plc",              exDate:"2026-09-15",payDate:"2026-10-03",amount:1.20, type:"Final"},
-  {ticker:"KAKZ",name:"Kakuzi Plc",              exDate:"2026-09-20",payDate:"2026-10-08",amount:13.00,type:"Final"},
-  {ticker:"UNTD",name:"Unilever Kenya",          exDate:"2026-09-25",payDate:"2026-10-13",amount:0.98, type:"Final"},
-  {ticker:"JUB", name:"Jubilee Holdings",        exDate:"2026-10-01",payDate:"2026-10-20",amount:8.00, type:"Final"},
-  {ticker:"ICDC",name:"ICDCI",                   exDate:"2026-10-12",payDate:"2026-10-30",amount:3.80, type:"Final"},
-  {ticker:"CRWN",name:"Crown Paints Kenya",      exDate:"2026-10-18",payDate:"2026-11-05",amount:1.70, type:"Final"},
-  {ticker:"PAFI",name:"Pan Africa Insurance",    exDate:"2026-10-25",payDate:"2026-11-12",amount:1.44, type:"Final"},
-  {ticker:"BRIT",name:"Britam Holdings",         exDate:"2026-11-05",payDate:"2026-11-22",amount:0.28, type:"Final"},
-  {ticker:"KPC", name:"Kenya Pipeline Company",  exDate:"2026-11-20",payDate:"2026-12-08",amount:0.36, type:"Final"},
-  {ticker:"NAIB",name:"Nairobi Securities Exchange",exDate:"2026-11-25",payDate:"2026-12-12",amount:0.68,type:"Final"},
-  {ticker:"STA", name:"Standard Group",          exDate:"2026-12-05",payDate:"2026-12-22",amount:0.95, type:"Final"},
-  {ticker:"REA", name:"Rea Vipingo",             exDate:"2026-12-10",payDate:"2026-12-28",amount:1.29, type:"Final"},
-  {ticker:"BCOM",name:"B.O.C. Kenya",            exDate:"2026-12-15",payDate:"2027-01-05",amount:5.75, type:"Final"},
+  {ticker:"SCBK",name:"Standard Chartered Kenya",exDate:"2026-04-25",payDate:"2026-05-15",amount:28.00,type:"Final", shares:369.3},
+  {ticker:"SCOM",name:"Safaricom Plc",           exDate:"2026-04-30",payDate:"2026-05-20",amount:1.10, type:"Final", shares:40065.4},
+  {ticker:"ABSA",name:"Absa Bank Kenya",         exDate:"2026-05-01",payDate:"2026-05-20",amount:0.98, type:"Final", shares:5476.4},
+  {ticker:"EQTY",name:"Equity Group Holdings",   exDate:"2026-05-08",payDate:"2026-05-28",amount:4.25, type:"Final", shares:3773.7},
+  {ticker:"KCB",name:"KCB Group Plc",           exDate:"2026-05-12",payDate:"2026-06-01",amount:3.00, type:"Final", shares:3205.7},
+  {ticker:"BAT",name:"BAT Kenya Plc",           exDate:"2026-05-20",payDate:"2026-06-10",amount:52.00,type:"Final", shares:100.0},
+  {ticker:"NCBA",name:"NCBA Group",              exDate:"2026-05-22",payDate:"2026-06-10",amount:3.40, type:"Final", shares:1632.4},
+  {ticker:"COOP",name:"Co-operative Bank",       exDate:"2026-06-02",payDate:"2026-06-20",amount:1.50, type:"Final", shares:5876.7},
+  {ticker:"SBIC",name:"Stanbic Holdings",        exDate:"2026-06-10",payDate:"2026-06-30",amount:14.00,type:"Final", shares:396.8},
+  {ticker:"I&M",name:"I&M Group",               exDate:"2026-06-15",payDate:"2026-07-03",amount:1.47, type:"Final", shares:100.0},
+  {ticker:"DTK",name:"Diamond Trust Bank",      exDate:"2026-06-20",payDate:"2026-07-08",amount:1.80, type:"Final", shares:225.0},
+  {ticker:"EABL",name:"East African Breweries",  exDate:"2026-07-05",payDate:"2026-07-25",amount:4.00, type:"Interim", shares:790.7},
+  {ticker:"KPLC",name:"Kenya Power & Lighting",  exDate:"2026-07-15",payDate:"2026-08-04",amount:0.20, type:"Final", shares:1951.5},
+  {ticker:"TOTL",name:"TotalEnergies Kenya",     exDate:"2026-07-22",payDate:"2026-08-11",amount:2.00, type:"Final", shares:105.1},
+  {ticker:"KEGN",name:"KenGen",                  exDate:"2026-08-10",payDate:"2026-08-28",amount:0.40, type:"Final", shares:3960.7},
+  {ticker:"BAMB",name:"Bamburi Cement",          exDate:"2026-08-18",payDate:"2026-09-05",amount:5.20, type:"Final", shares:362.9},
+  {ticker:"NMG",name:"Nation Media Group",      exDate:"2026-09-05",payDate:"2026-09-22",amount:1.10, type:"Interim", shares:188.5},
+  {ticker:"SASN",name:"Sasini Plc",              exDate:"2026-09-15",payDate:"2026-10-03",amount:1.20, type:"Final", shares:187.5},
+  {ticker:"KAKZ",name:"Kakuzi Plc",              exDate:"2026-09-20",payDate:"2026-10-08",amount:13.00,type:"Final", shares:100.0},
+  {ticker:"UNTD",name:"Unilever Kenya",          exDate:"2026-09-25",payDate:"2026-10-13",amount:0.98, type:"Final", shares:100.0},
+  {ticker:"JUB",name:"Jubilee Holdings",        exDate:"2026-10-01",payDate:"2026-10-20",amount:8.00, type:"Final", shares:90.0},
+  {ticker:"ICDC",name:"ICDCI",                   exDate:"2026-10-12",payDate:"2026-10-30",amount:3.80, type:"Final", shares:100.0},
+  {ticker:"CRWN",name:"Crown Paints Kenya",      exDate:"2026-10-18",payDate:"2026-11-05",amount:1.70, type:"Final", shares:163.3},
+  {ticker:"PAFI",name:"Pan Africa Insurance",    exDate:"2026-10-25",payDate:"2026-11-12",amount:1.44, type:"Final", shares:100.0},
+  {ticker:"BRIT",name:"Britam Holdings",         exDate:"2026-11-05",payDate:"2026-11-22",amount:0.28, type:"Final", shares:2749.4},
+  {ticker:"KPC",name:"Kenya Pipeline Company",  exDate:"2026-11-20",payDate:"2026-12-08",amount:0.36, type:"Final", shares:100.0},
+  {ticker:"NAIB",name:"Nairobi Securities Exchange",exDate:"2026-11-25",payDate:"2026-12-12",amount:0.68,type:"Final", shares:100.0},
+  {ticker:"STA",name:"Standard Group",          exDate:"2026-12-05",payDate:"2026-12-22",amount:0.95, type:"Final", shares:100.0},
+  {ticker:"REA",name:"Rea Vipingo",             exDate:"2026-12-10",payDate:"2026-12-28",amount:1.29, type:"Final", shares:100.0},
+  {ticker:"BCOM",name:"B.O.C. Kenya",            exDate:"2026-12-15",payDate:"2027-01-05",amount:5.75, type:"Final", shares:100.0},
 ];
 
 // ── STATE ─────────────────────────────────────────────────────────
@@ -1005,13 +1066,167 @@ let isFetching = false;
 let currentPage = 1;
 let currentSort = { field: 'score', asc: false };
 
-function save(k,v) {
+// Cloud save debounce — prevents flooding Firestore on rapid renders/keystrokes
+let _cloudSaveTimer = null;
+// Guard flag: true while we are loading data FROM the cloud,
+// so local save() calls don't immediately overwrite the cloud snapshot.
+let _isLoadingFromCloud = false;
+
+function save(k, v) {
+  // 1. Always write to localStorage immediately
   try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {}
-  // Also cloud-save if signed in
-  const payload = { watchlist, portfolio, alerts, cfg: CFG };
-  saveToCloud(payload);
+  // 2. Skip cloud save while we are in the middle of loading cloud data
+  if (_isLoadingFromCloud) return;
+  // 3. Debounce: wait 800 ms of silence before writing to Firestore
+  clearTimeout(_cloudSaveTimer);
+  _cloudSaveTimer = setTimeout(() => {
+    const payload = { watchlist, portfolio, alerts, cfg: CFG };
+    saveToCloud(payload);
+  }, 800);
 }
 function load(k){ try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;} }
+
+
+// ── MARKET METRICS — recalculate everything after price updates ──────────────
+// NSE 20 constituents (top 20 stocks by activity, weighted equally for index approx)
+const NSE20_TICKERS = ['SCOM','EQTY','KCB','COOP','SCBK','SBIC','EABL','BAT',
+                        'BAMB','NMG','TOTL','KPLC','KEGN','JUB','BRIT','NCBA',
+                        'IMHP','ABSA','SASN','BKGR'];
+
+// Baseline index values (calculated from opening static prices on load)
+let _baseIndexValue  = null;  // sum of (price × shares) for NSE20 at load time
+let _baseMktCap      = null;  // total market cap at load time
+
+function _computeIndexValue() {
+  return NSE20_TICKERS.reduce((sum, tk) => {
+    const s = STOCKS.find(x => x.ticker === tk);
+    return sum + (s ? s.price * (s.shares || 100) : 0);
+  }, 0);
+}
+function _computeTotalMktCap() {
+  // Sum price × shares for all stocks, deduplicate tickers
+  const seen = new Set();
+  return STOCKS.reduce((sum, s) => {
+    if (seen.has(s.ticker)) return sum;
+    seen.add(s.ticker);
+    return sum + s.price * (s.shares || 100);
+  }, 0);
+}
+
+function updateMarketMetrics() {
+  // ── Initialise baselines on first call ────────────────────────────
+  if (_baseIndexValue === null) {
+    _baseIndexValue = _computeIndexValue();
+    _baseMktCap     = _computeTotalMktCap();
+  }
+
+  const hasLive = Object.keys(livePrices).length > 0;
+
+  // ── NSE 20 Index ─────────────────────────────────────────────────
+  const currentIndex = _computeIndexValue();
+  // Scale to NSE-20 neighbourhood: 3588 was the published value, so scale ratio
+  const scaledIndex = Math.round((_baseIndexValue > 0 ? (currentIndex / _baseIndexValue) : 1) * 3588);
+  const indexChgPct = _baseIndexValue > 0 ? ((currentIndex - _baseIndexValue) / _baseIndexValue * 100) : 0;
+  const nse20El  = document.getElementById('m-nse20');
+  const nse20Chg = document.getElementById('m-nse20-chg');
+  if (nse20El) {
+    nse20El.textContent = scaledIndex.toLocaleString();
+    nse20El.style.color = indexChgPct > 0 ? 'var(--accent)' : indexChgPct < 0 ? 'var(--red)' : '#e8f0f8';
+  }
+  if (nse20Chg) {
+    const sign = indexChgPct >= 0 ? '+' : '';
+    nse20Chg.textContent = hasLive
+      ? `${sign}${indexChgPct.toFixed(2)}% today`
+      : 'Static — refresh for live';
+    nse20Chg.style.color = indexChgPct > 0 ? 'var(--accent)' : indexChgPct < 0 ? 'var(--red)' : 'var(--muted)';
+  }
+
+  // ── Market Cap ───────────────────────────────────────────────────
+  const totalMktCap = _computeTotalMktCap();   // in millions KES
+  const mktCapBn    = totalMktCap / 1000;       // billions
+  const mktCapEl    = document.getElementById('m-mktcap');
+  const mktCapChg   = document.getElementById('m-mktcap-chg');
+  if (mktCapEl) {
+    if (mktCapBn >= 1000) {
+      mktCapEl.textContent = (mktCapBn / 1000).toFixed(2) + 'T';
+    } else {
+      mktCapEl.textContent = mktCapBn.toFixed(1) + 'B';
+    }
+  }
+  if (mktCapChg && _baseMktCap > 0) {
+    const capChgPct = (totalMktCap - _baseMktCap) / _baseMktCap * 100;
+    const sign = capChgPct >= 0 ? '+' : '';
+    mktCapChg.textContent = hasLive
+      ? `KES · ${sign}${capChgPct.toFixed(2)}% vs open`
+      : 'KES Total';
+    mktCapChg.style.color = capChgPct > 0 ? 'var(--accent)' : capChgPct < 0 ? 'var(--red)' : 'var(--muted)';
+  }
+
+  // ── Average Dividend Yield (paying stocks only) ───────────────────
+  const payingStocks = STOCKS.filter(s => s.yield > 0);
+  const avgYield = payingStocks.length
+    ? (payingStocks.reduce((s, x) => s + x.yield, 0) / payingStocks.length).toFixed(1)
+    : '—';
+  const avgYieldEl = document.getElementById('m-avgyield');
+  if (avgYieldEl) avgYieldEl.textContent = avgYield !== '—' ? avgYield + '%' : '—';
+
+  // ── Top Gainer (from live prices) ─────────────────────────────────
+  const gainerEl  = document.getElementById('m-gainer');
+  const gainerPct = document.getElementById('m-gainer-pct');
+  if (gainerEl) {
+    const entries = Object.entries(livePrices)
+      .filter(([, lp]) => lp.changePct !== 0)
+      .sort(([, a], [, b]) => b.changePct - a.changePct);
+    if (entries.length) {
+      const [tk, lp] = entries[0];
+      gainerEl.textContent = tk;
+      gainerEl.style.color = lp.changePct > 0 ? 'var(--accent)' : 'var(--red)';
+      if (gainerPct) {
+        const sign = lp.changePct >= 0 ? '+' : '';
+        gainerPct.textContent = `${sign}${lp.changePct.toFixed(2)}% · KES ${lp.price.toFixed(2)}`;
+        gainerPct.style.color = lp.changePct > 0 ? 'var(--accent)' : 'var(--red)';
+      }
+    } else {
+      gainerEl.textContent = '—';
+      if (gainerPct) gainerPct.textContent = 'Refresh for live data';
+    }
+  }
+
+  // ── Portfolio Value & P&L ─────────────────────────────────────────
+  if (portfolio.length) {
+    let totalBook = 0, totalMkt = 0;
+    portfolio.forEach(h => {
+      const s = STOCKS.find(x => x.ticker === h.ticker);
+      if (!s) return;
+      totalBook += h.shares * h.buyPrice;
+      totalMkt  += h.shares * s.price;
+    });
+    const pnl    = totalMkt - totalBook;
+    const pnlPct = totalBook > 0 ? ((pnl / totalBook) * 100).toFixed(1) : 0;
+    const pnlSign = pnl >= 0 ? '+' : '';
+    const portValEl = document.getElementById('m-portval');
+    const portPnlEl = document.getElementById('m-portpnl');
+    if (portValEl) portValEl.textContent = 'KES ' + Math.round(totalMkt).toLocaleString();
+    if (portPnlEl) {
+      portPnlEl.textContent = `${pnlSign}KES ${Math.round(pnl).toLocaleString()} (${pnlSign}${pnlPct}%)`;
+      portPnlEl.style.color = pnl >= 0 ? 'var(--accent)' : 'var(--red)';
+    }
+  }
+
+  // ── Triggered alerts re-check ─────────────────────────────────────
+  let newTriggers = 0;
+  alerts.forEach(a => {
+    const s = STOCKS.find(x => x.ticker === a.ticker);
+    if (!s) return;
+    const wasTriggered = a._triggered;
+    if (a.type === 'above'  && s.price > a.target) a._triggered = true;
+    else if (a.type === 'below'  && s.price < a.target) a._triggered = true;
+    else if (a.type === 'yield'  && s.yield > a.target) a._triggered = true;
+    else a._triggered = false;
+    if (a._triggered && !wasTriggered) newTriggers++;
+  });
+  if (newTriggers > 0) toast(`🔔 ${newTriggers} price alert${newTriggers > 1 ? 's' : ''} triggered!`);
+}
 
 // ── SCORING ───────────────────────────────────────────────────────
 function score(s){
@@ -1059,6 +1274,7 @@ function renderTable(){
 
   const buys = scored().filter(s => s.signal === 'buy').length;
   document.getElementById('m-buys').textContent = buys;
+  updateMarketMetrics();
 
   const total = data.length;
   const pages = pp >= 100 ? 1 : Math.ceil(total/pp);
@@ -1461,7 +1677,7 @@ async function claudePriceBatch(tickers) {
   const tickerList = tickers.join(', ');
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
@@ -1565,7 +1781,11 @@ async function fetchLivePrices() {
     statusEl.className = 'live-status success';
     statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices updated`;
     tsEl.textContent = `· NSE live data · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
-    renderTable(); renderWatchlist(); renderPortfolio();
+    // Reset baselines so metrics reflect the new prices as the new "open"
+    _baseIndexValue = null;
+    _baseMktCap = null;
+    updateMarketMetrics();
+    renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
     toast(`✓ ${updated} stock prices updated`);
   } else {
     statusEl.className = 'live-status error';
@@ -1761,7 +1981,7 @@ async function fetchMarketNews() {
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 3000,
@@ -1925,8 +2145,9 @@ renderWatchlist();
 renderCalendar();
 renderPortfolio();
 renderAlerts();
+updateMarketMetrics();  // initial static metrics on page load
 updateClock();
 setInterval(updateClock,1000);
-setInterval(()=>{renderTable();renderAlerts();},60000);
+setInterval(()=>{renderTable();renderAlerts();updateMarketMetrics();},60000);
 </script>
 </body>
