@@ -391,8 +391,8 @@ body.light select, body.light .form-group select, body.light .form-group input {
 
 <!-- ===== SCREENER ===== -->
 <div class="tab-content active" id="tab-screener">
-  <div id="apikey-banner" style="display:none;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:12px;font-family:var(--mono);color:var(--gold);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <span>⚠ No API key set — live prices and news won't work. Add your key in <strong>Settings → API Key</strong>.</span>
+  <div id="backend-banner" style="background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:12px;font-family:var(--mono);color:var(--gold);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span>⚠ Backend not configured — live prices &amp; news need the Node.js backend. See <strong>Settings → Backend URL</strong>.</span>
     <button class="btn btn-sm" onclick="switchTabById('settings')" style="border-color:var(--gold);color:var(--gold);white-space:nowrap;">Go to Settings ↗</button>
   </div>
   <div class="live-bar">
@@ -626,20 +626,21 @@ body.light select, body.light .form-group select, body.light .form-group input {
     <div class="panel-header"><h2>Settings</h2></div>
     <div class="panel-body">
       <div class="settings-section">
-        <h3>Anthropic API Key — Required for Live Prices &amp; News</h3>
+        <h3>Backend URL — Required for Live Prices &amp; News</h3>
         <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
           <label style="color:var(--text2);font-size:13px;">
-            Live price refresh and market news both use the Claude AI API. Enter your key below — it is saved only in this browser and never sent anywhere except Anthropic's servers.
-            <br><a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);font-size:11px;font-family:var(--mono);">Get a free API key at console.anthropic.com ↗</a>
+            Enter the URL of your deployed Node.js backend server. The backend scrapes live NSE prices and news.
+            Deploy it free on Render.com — full instructions in <code style="font-family:var(--mono);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">nse-backend/README.md</code>.
+            <br><br>
+            <strong style="color:var(--gold);">Quick start:</strong> Deploy <code style="font-family:var(--mono);">nse-backend/</code> to Render → paste the URL below → click Save.
           </label>
           <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap;">
-            <input type="password" id="apikey-input" placeholder="sk-ant-api03-…" 
-              style="flex:1;min-width:260px;padding:9px 12px;background:var(--navy);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;"
-              oninput="checkApiKeyInput()">
-            <button class="btn btn-accent" onclick="saveApiKey()" id="apikey-save-btn" style="padding:9px 18px;">Save Key</button>
-            <button class="btn" onclick="clearApiKey()" style="padding:9px 14px;">Clear</button>
+            <input type="url" id="backend-url-input" placeholder="https://nse-backend-xxxx.onrender.com"
+              style="flex:1;min-width:300px;padding:9px 12px;background:var(--navy);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;">
+            <button class="btn btn-accent" onclick="saveBackendUrl()" style="padding:9px 18px;">Save URL</button>
+            <button class="btn" onclick="testBackend()" style="padding:9px 14px;">Test</button>
           </div>
-          <div id="apikey-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
+          <div id="backend-url-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
         </div>
       </div>
       <div class="settings-section">
@@ -1688,232 +1689,152 @@ function switchTabById(name){
 }
 
 // ════════════════════════════════════════════════════════════════
-// API KEY MANAGEMENT
-// Key is stored in localStorage — never leaves the browser except
-// in the Authorization header to api.anthropic.com
+// BACKEND URL — set this to your Render/Railway URL after deploying
+// See nse-backend/README.md for step-by-step deployment instructions
 // ════════════════════════════════════════════════════════════════
+const BACKEND_URL = localStorage.getItem('nse_backend_url') || 'YOUR_RENDER_URL_HERE';
 
-function getApiKey() {
-  try { return localStorage.getItem('nse_anthropic_key') || ''; } catch(e) { return ''; }
-}
-function saveApiKey() {
-  const val = document.getElementById('apikey-input').value.trim();
-  if (!val.startsWith('sk-ant-')) {
-    document.getElementById('apikey-status').style.color = 'var(--red)';
-    document.getElementById('apikey-status').textContent = '⚠ That doesn\'t look like a valid Anthropic key (should start with sk-ant-)';
+// Backend URL management (shown in Settings tab)
+function saveBackendUrl() {
+  const val = (document.getElementById('backend-url-input')?.value || '').trim().replace(/\/$/, '');
+  if (!val.startsWith('http')) {
+    document.getElementById('backend-url-status').style.color = 'var(--red)';
+    document.getElementById('backend-url-status').textContent = '⚠ Must start with https://';
     return;
   }
   try {
-    localStorage.setItem('nse_anthropic_key', val);
-    document.getElementById('apikey-status').style.color = 'var(--accent)';
-    document.getElementById('apikey-status').textContent = '✓ Key saved — prices and news will now work';
-    document.getElementById('apikey-input').value = val.slice(0,12) + '…' + val.slice(-4);
-    showApikeyBanner();
-    toast('✓ API key saved — click Refresh Prices to test');
-  } catch(e) {
-    document.getElementById('apikey-status').textContent = 'Could not save key: ' + e.message;
+    localStorage.setItem('nse_backend_url', val);
+    document.getElementById('backend-url-status').style.color = 'var(--accent)';
+    document.getElementById('backend-url-status').textContent = '✓ Saved — click Refresh Prices to test';
+    toast('✓ Backend URL saved');
+  } catch(e) {}
+}
+function initBackendUrlUI() {
+  const stored = localStorage.getItem('nse_backend_url');
+  const input  = document.getElementById('backend-url-input');
+  const status = document.getElementById('backend-url-status');
+  if (!input) return;
+  if (stored) {
+    input.value = stored;
+    status.style.color = 'var(--accent)';
+    status.textContent = '✓ Backend URL configured';
+  } else {
+    status.style.color = 'var(--gold)';
+    status.textContent = 'No backend URL set — see README to deploy the backend';
   }
 }
-function clearApiKey() {
-  try { localStorage.removeItem('nse_anthropic_key'); } catch(e) {}
-  document.getElementById('apikey-input').value = '';
-  document.getElementById('apikey-status').style.color = 'var(--muted)';
-  document.getElementById('apikey-status').textContent = 'Key cleared.';
-  showApikeyBanner();
-}
-function checkApiKeyInput() {
-  const val = document.getElementById('apikey-input').value.trim();
-  const ok = val.startsWith('sk-ant-') && val.length > 20;
-  document.getElementById('apikey-save-btn').style.opacity = ok ? '1' : '0.5';
-}
-function showApikeyBanner() {
-  const key = getApiKey();
-  const banner = document.getElementById('apikey-banner');
-  if (!banner) return;
-  banner.style.display = key ? 'none' : 'flex';
-}
-function initApiKeyUI() {
-  const key = getApiKey();
-  if (key) {
-    document.getElementById('apikey-input').value = key.slice(0,12) + '…' + key.slice(-4);
-    document.getElementById('apikey-status').style.color = 'var(--accent)';
-    document.getElementById('apikey-status').textContent = '✓ Key loaded — ready to fetch prices and news';
-  }
-  showApikeyBanner();
+function getBackendUrl() {
+  return (localStorage.getItem('nse_backend_url') || '').trim().replace(/\/$/, '');
 }
 
 // ════════════════════════════════════════════════════════════════
-// LIVE PRICE FETCHING — Claude API + web_search
-// Works from any browser with internet. No CORS issues.
-// Batches tickers in groups so the request stays within token limits.
+// LIVE PRICE FETCHING — calls your Node.js backend
+// Backend scrapes afx.kwayisi.org + mystocks.co.ke with caching
 // ════════════════════════════════════════════════════════════════
-
-function buildAnthropicHeaders() {
-  const key = getApiKey();
-  if (!key) throw new Error('No API key set. Go to Settings → API Key to add your Anthropic key.');
-  return {
-    'Content-Type': 'application/json',
-    'x-api-key': key,
-    'anthropic-version': '2023-06-01',
-    'anthropic-dangerous-direct-browser-access': 'true'
-  };
-}
-
-async function claudePriceBatch(tickers) {
-  const tickerList = tickers.join(', ');
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: buildAnthropicHeaders(),
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      system: `You are a financial data assistant for the Nairobi Securities Exchange (NSE), Kenya.
-Search for the latest NSE stock prices and return ONLY a raw JSON object — no markdown, no code fences, no explanation, nothing else before or after the JSON.
-
-Required format:
-{
-  "TICKER": { "price": 12.34, "change": 0.50, "changePct": 1.23 },
-  ...
-}
-
-- Search afx.kwayisi.org/nse or african-markets.com or nairobi-stocks.com for current NSE Kenya prices.
-- Prices must be in KES (Kenyan Shillings).
-- If a ticker price is genuinely unavailable, omit it entirely.
-- Return ONLY the JSON object. No text before or after it.`,
-      messages: [{
-        role: 'user',
-        content: `Search for current NSE Kenya stock prices for these tickers and return the JSON: ${tickerList}. Today is ${new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })}.`
-      }]
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const msg = err?.error?.message || response.statusText;
-    if (response.status === 401) throw new Error('Invalid API key. Check your key in Settings → API Key.');
-    if (response.status === 429) throw new Error('Rate limited. Wait a moment then try again.');
-    throw new Error(`API error ${response.status}: ${msg}`);
-  }
-
-  const data = await response.json();
-  let rawText = '';
-  for (const block of data.content) {
-    if (block.type === 'text') rawText += block.text;
-  }
-  rawText = rawText.replace(/```json|```/g, '').trim();
-  const match = rawText.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON object in response');
-  return JSON.parse(match[0]);
-}
-
-// ── MAIN PRICE FETCH ORCHESTRATOR ────────────────────────────────
 async function fetchLivePrices() {
   if (isFetching) return;
 
-  // Check API key before doing anything
-  if (!getApiKey()) {
-    const statusEl = document.getElementById('live-status');
+  const backendUrl = getBackendUrl();
+  const statusEl   = document.getElementById('live-status');
+  const tsEl       = document.getElementById('live-ts');
+  const btn        = document.getElementById('refresh-btn');
+  const icon       = document.getElementById('refresh-icon');
+
+  if (!backendUrl || backendUrl === 'YOUR_RENDER_URL_HERE') {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ No API key set — go to Settings → API Key to add your Anthropic key';
-    showApikeyBanner();
-    toast('⚠ Add your API key in Settings first');
+    statusEl.textContent = '⚠ Backend not configured — go to Settings → Backend URL';
+    toast('⚠ Set your backend URL in Settings first');
     return;
   }
 
-  isFetching = true;
-  const btn      = document.getElementById('refresh-btn');
-  const icon     = document.getElementById('refresh-icon');
-  const statusEl = document.getElementById('live-status');
-  const tsEl     = document.getElementById('live-ts');
-
+  isFetching   = true;
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
-  statusEl.className = 'live-status fetching';
-  statusEl.textContent = 'Searching NSE prices via Claude…';
-  tsEl.textContent = '';
+  statusEl.className   = 'live-status fetching';
+  statusEl.textContent = 'Fetching live prices from backend…';
+  tsEl.textContent     = '';
 
-  const allTickers = STOCKS.map(s => s.ticker);
-  const prices = {};
-
-  // Fetch all tickers in one batch (Claude handles pagination internally via web search)
-  const BATCH = 30;
   try {
-    for (let i = 0; i < allTickers.length; i += BATCH) {
-      const chunk = allTickers.slice(i, i + BATCH);
-      const end = Math.min(i + BATCH, allTickers.length);
-      statusEl.textContent = `Fetching prices ${i + 1}–${end} of ${allTickers.length}…`;
-      try {
-        const result = await claudePriceBatch(chunk);
-        Object.assign(prices, result);
-      } catch(e) {
-        console.warn(`Batch ${i}–${end} failed:`, e.message);
-        // Surface key/auth errors immediately — no point continuing
-        if (e.message.includes('API key') || e.message.includes('Invalid')) {
-          statusEl.className = 'live-status error';
-          statusEl.textContent = '⚠ ' + e.message;
-          isFetching = false;
-          btn.disabled = false;
-          icon.innerHTML = '↻';
-          return;
-        }
+    const res = await fetch(`${backendUrl}/prices`, { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`Backend responded ${res.status}`);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Backend error');
+
+    const prices = json.data;
+    const now    = new Date();
+    let updated  = 0;
+
+    for (const [ticker, info] of Object.entries(prices)) {
+      if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
+      livePrices[ticker] = { price: info.price, change: info.change ?? 0, changePct: info.changePct ?? 0, fetchedAt: now };
+      const stock = STOCKS.find(s => s.ticker === ticker);
+      if (stock) {
+        stock.price = info.price;
+        const div = DIVIDENDS.find(d => d.ticker === ticker);
+        if (div && stock.price > 0)
+          stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
+        updated++;
       }
     }
-  } catch(e) {
-    console.error('Price fetch error:', e);
-  }
 
-  // ── APPLY RESULTS ───────────────────────────────────────────────
-  const now = new Date();
-  let updated = 0;
-  for (const [ticker, info] of Object.entries(prices)) {
-    if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
-    livePrices[ticker] = {
-      price: parseFloat(info.price),
-      change: parseFloat(info.change ?? 0),
-      changePct: parseFloat(info.changePct ?? 0),
-      fetchedAt: now
-    };
-    const stock = STOCKS.find(s => s.ticker === ticker);
-    if (stock) {
-      stock.price = parseFloat(info.price);
-      const div = DIVIDENDS.find(d => d.ticker === ticker);
-      if (div && stock.price > 0)
-        stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
-      updated++;
+    if (updated > 0) {
+      statusEl.className   = 'live-status success';
+      statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices live${json.cached ? ' (cached)' : ''}`;
+      tsEl.textContent     = `· kwayisi.org · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
+      _baseIndexValue = null; _baseMktCap = null;
+      updateMarketMetrics();
+      renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
+      toast(`✓ ${updated} live NSE prices loaded`);
+    } else {
+      throw new Error('Backend returned no usable prices');
     }
-  }
 
-  if (updated > 0) {
-    statusEl.className = 'live-status success';
-    statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices updated`;
-    tsEl.textContent = `· NSE live data · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
-    _baseIndexValue = null;
-    _baseMktCap = null;
-    updateMarketMetrics();
-    renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
-    toast(`✓ ${updated} live prices updated`);
-  } else {
-    statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ No prices returned. The API responded but found no data — try again.';
-    toast('Live fetch returned no data — try again');
+  } catch(err) {
+    console.error('fetchLivePrices:', err);
+    statusEl.className   = 'live-status error';
+    statusEl.textContent = `⚠ ${err.message}`;
+    toast('Price fetch failed — check backend URL in Settings');
+  } finally {
+    isFetching   = false;
+    btn.disabled = false;
+    icon.innerHTML = '↻';
   }
-
-  isFetching = false;
-  btn.disabled = false;
-  icon.innerHTML = '↻';
 }
 
-// Auto-fetch on load
-setTimeout(() => fetchLivePrices(), 600);
-// Auto-refresh every 3 minutes during NSE market hours (Mon–Fri 09:30–15:00 EAT)
+// Auto-fetch on load (only if backend is configured)
+setTimeout(() => { if (getBackendUrl() && getBackendUrl() !== 'YOUR_RENDER_URL_HERE') fetchLivePrices(); }, 800);
+// Auto-refresh every 3 minutes during NSE market hours
 setInterval(() => {
   const t = new Date(new Date().toLocaleString('en-US', { timeZone:'Africa/Nairobi' }));
   if (t.getDay()>=1 && t.getDay()<=5 && (t.getHours()>9||(t.getHours()===9&&t.getMinutes()>=30)) && t.getHours()<15)
     fetchLivePrices();
 }, 3 * 60 * 1000);
 
-// ── THEME TOGGLE ─────────────────────────────────────────────────
+async function testBackend() {
+  const url = (document.getElementById('backend-url-input')?.value || '').trim().replace(/\/$/, '');
+  const status = document.getElementById('backend-url-status');
+  if (!url) { status.style.color='var(--red)'; status.textContent='Enter a URL first.'; return; }
+  status.style.color='var(--gold)'; status.textContent='Testing…';
+  try {
+    const res = await fetch(`${url}/`, { signal: AbortSignal.timeout(10000) });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      status.style.color='var(--accent)';
+      status.textContent=`✓ Backend is live — ${json.service} (${json.time})`;
+    } else { throw new Error('Unexpected response'); }
+  } catch(e) {
+    status.style.color='var(--red)';
+    status.textContent=`⚠ Could not reach backend: ${e.message}`;
+  }
+}
+
+// Hide backend banner once configured
+function updateBackendBanner() {
+  const banner = document.getElementById('backend-banner');
+  if (!banner) return;
+  const ok = getBackendUrl() && getBackendUrl() !== 'YOUR_RENDER_URL_HERE';
+  banner.style.display = ok ? 'none' : 'flex';
+}
 function toggleTheme() {
   const isLight = document.body.classList.toggle('light');
   document.getElementById('theme-btn').textContent = isLight ? '🌙' : '☀';
@@ -2043,13 +1964,13 @@ function renderProjector() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// MARKET NEWS — Claude API + web_search
-// Searches live web for current NSE Kenya news. No CORS issues.
+// MARKET NEWS — fetched from backend (scrapes Business Daily,
+// Standard, Nation Africa, Capital FM RSS feeds server-side)
 // ════════════════════════════════════════════════════════════════
 
 function detectSentiment(text) {
   const t = text.toLowerCase();
-  const pos = ['profit','gain','rise','surge','jump','growth','dividend','record','beat','strong','rally','up','increase','exceed','approve','win','award'];
+  const pos = ['profit','gain','rise','surge','jump','growth','dividend','record','beat','strong','rally','increase','approve','win','award'];
   const neg = ['loss','fall','drop','decline','plunge','cut','reduce','miss','weak','down','decrease','below','concern','risk','suspend','warn','debt'];
   const ps = pos.reduce((n,w) => n + (t.includes(w)?1:0), 0);
   const ns = neg.reduce((n,w) => n + (t.includes(w)?1:0), 0);
@@ -2067,122 +1988,70 @@ let newsFetching = false;
 async function fetchMarketNews() {
   if (newsFetching) return;
 
-  if (!getApiKey()) {
-    const statusEl = document.getElementById('news-status');
-    statusEl.style.display = 'block';
-    statusEl.style.color = 'var(--red)';
-    statusEl.textContent = '⚠ No API key set — go to Settings → API Key to add your Anthropic key';
-    showApikeyBanner();
+  const backendUrl = getBackendUrl();
+  const statusEl   = document.getElementById('news-status');
+  const gridEl     = document.getElementById('news-grid');
+  const emptyEl    = document.getElementById('news-empty');
+  const btn        = document.getElementById('news-refresh-btn');
+  const icon       = document.getElementById('news-refresh-icon');
+
+  if (!backendUrl || backendUrl === 'YOUR_RENDER_URL_HERE') {
+    statusEl.style.display  = 'block';
+    statusEl.style.color    = 'var(--red)';
+    statusEl.textContent    = '⚠ Backend not configured — go to Settings → Backend URL';
     return;
   }
 
   newsFetching = true;
-  const btn      = document.getElementById('news-refresh-btn');
-  const icon     = document.getElementById('news-refresh-icon');
-  const statusEl = document.getElementById('news-status');
-  const gridEl   = document.getElementById('news-grid');
-  const emptyEl  = document.getElementById('news-empty');
-
   btn.disabled = true;
   icon.innerHTML = '<span class="spin">↻</span>';
-  statusEl.style.display = 'block';
-  statusEl.style.color = 'var(--gold)';
-  statusEl.textContent = 'Searching for latest NSE Kenya news…';
-  emptyEl.style.display = 'none';
-  gridEl.innerHTML = '';
+  statusEl.style.display  = 'block';
+  statusEl.style.color    = 'var(--gold)';
+  statusEl.textContent    = 'Loading news from backend…';
+  emptyEl.style.display   = 'none';
+  gridEl.innerHTML        = '';
 
   try {
-    const today = new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', day:'numeric', month:'long', year:'numeric' });
+    const res = await fetch(`${backendUrl}/news`, { signal: AbortSignal.timeout(25000) });
+    if (!res.ok) throw new Error(`Backend responded ${res.status}`);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Backend error');
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: buildAnthropicHeaders(),
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 3000,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        system: `You are a financial news assistant specialising in the Nairobi Securities Exchange (NSE), Kenya.
-
-Search for the latest NSE Kenya stock market news, corporate announcements, earnings results, dividend declarations, regulatory news, and Kenyan economic data that affects investors.
-
-Return ONLY a raw JSON array — no markdown, no code fences, no explanation, no text before or after the array.
-
-Required format:
-[
-  {
-    "headline": "Full news headline",
-    "summary": "2-3 sentence plain-English summary of the story and why it matters to NSE investors",
-    "source": "Publication name (e.g. Business Daily, Nation, Standard, Reuters)",
-    "date": "e.g. 17 Apr 2026",
-    "tickers": ["SCOM","KCB"],
-    "sentiment": "positive"
-  }
-]
-
-Rules:
-- Return 8-12 news items, most recent first
-- sentiment must be exactly one of: positive, negative, neutral
-- tickers must only include real NSE Kenya tickers (e.g. SCOM, KCB, EQTY, COOP, BAT, EABL, SCBK, etc.)
-- If no relevant tickers apply, use an empty array []
-- Search businessdailyafrica.com, nation.africa, standardmedia.co.ke, reuters.com for Kenya/NSE content
-- Return ONLY the JSON array. Nothing else.`,
-        messages: [{
-          role: 'user',
-          content: `Search for the latest NSE Kenya stock market and financial news. Today is ${today}. Find earnings reports, dividend announcements, NSE index moves, regulatory changes, and macroeconomic news affecting Kenyan stocks. Return raw JSON array only.`
-        }]
-      })
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg = errData?.error?.message || response.statusText;
-      if (response.status === 401) throw new Error('Invalid API key — check your key in Settings → API Key.');
-      if (response.status === 429) throw new Error('Rate limited — wait a moment and try again.');
-      throw new Error(`API ${response.status}: ${msg}`);
-    }
-
-    const data = await response.json();
-    let rawText = '';
-    for (const block of data.content) {
-      if (block.type === 'text') rawText += block.text;
-    }
-    rawText = rawText.replace(/```json|```/g, '').trim();
-
-    const arrMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!arrMatch) throw new Error('No JSON array in response — try again');
-
-    const items = JSON.parse(arrMatch[0]);
-    if (!Array.isArray(items) || items.length === 0) throw new Error('No news items returned — try again');
+    const items = json.data;
+    if (!items || items.length === 0) throw new Error('No news articles returned');
 
     gridEl.innerHTML = items.map(item => {
       const sentiment = item.sentiment || detectSentiment((item.headline||'') + ' ' + (item.summary||''));
-      const sentClass = sentiment === 'positive' ? 'news-pos' : sentiment === 'negative' ? 'news-neg' : 'news-neu';
-      const sentLabel = sentiment === 'positive' ? '▲ Positive' : sentiment === 'negative' ? '▼ Negative' : '● Neutral';
-      const tickers = Array.isArray(item.tickers) ? item.tickers : extractTickers((item.headline||'') + ' ' + (item.summary||''));
-      const tags = tickers.slice(0,4)
-        .filter(t => STOCKS.find(s => s.ticker === t))
-        .map(t => `<span class="news-ticker-tag" onclick="showDetail('${t}')">${t}</span>`).join('');
+      const sentClass = sentiment==='positive'?'news-pos':sentiment==='negative'?'news-neg':'news-neu';
+      const sentLabel = sentiment==='positive'?'▲ Positive':sentiment==='negative'?'▼ Negative':'● Neutral';
+      const tickers   = Array.isArray(item.tickers) ? item.tickers : extractTickers((item.headline||'')+(item.summary||''));
+      const tags      = tickers.slice(0,4).filter(t=>STOCKS.find(s=>s.ticker===t))
+                          .map(t=>`<span class="news-ticker-tag" onclick="showDetail('${t}')">${t}</span>`).join('');
+      const linkHtml  = item.link
+        ? `<a href="${item.link}" target="_blank" rel="noopener" style="font-size:10px;color:var(--accent);font-family:var(--mono);text-decoration:none;margin-top:6px;display:inline-block;">Read full article ↗</a>`
+        : '';
       return `<div class="news-card">
-        <div class="news-headline">${item.headline || 'No headline'}<span class="news-sentiment ${sentClass}">${sentLabel}</span></div>
-        <div class="news-meta">${item.source || 'NSE News'}${item.date ? ' · ' + item.date : ''}</div>
-        <div class="news-summary">${item.summary || 'No summary available.'}</div>
-        ${tags ? `<div class="news-tickers" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">${tags}</div>` : ''}
+        <div class="news-headline">${item.headline||'No headline'}<span class="news-sentiment ${sentClass}">${sentLabel}</span></div>
+        <div class="news-meta">${item.source||'NSE News'}${item.date?' · '+item.date:''}</div>
+        <div class="news-summary">${item.summary||'No summary available.'}</div>
+        ${tags?`<div class="news-tickers" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">${tags}</div>`:''}
+        ${linkHtml}
       </div>`;
     }).join('');
 
+    const sources = [...new Set(items.map(i=>i.source))].join(', ');
     statusEl.style.color = 'var(--accent)';
-    statusEl.textContent = `✓ ${items.length} articles loaded · ${new Date().toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
+    statusEl.textContent = `✓ ${items.length} articles${json.cached?' (cached)':''} · ${sources} · ${new Date().toLocaleTimeString('en-KE',{timeZone:'Africa/Nairobi'})} EAT`;
 
   } catch(err) {
-    console.error('News fetch error:', err);
+    console.error('fetchMarketNews:', err);
     statusEl.style.color = 'var(--red)';
     statusEl.textContent = `⚠ ${err.message}`;
-    gridEl.innerHTML = '';
     emptyEl.style.display = 'block';
     emptyEl.innerHTML = `<span>📡</span>${err.message}`;
   } finally {
     newsFetching = false;
-    btn.disabled = false;
+    btn.disabled  = false;
     icon.innerHTML = '↻';
   }
 }
@@ -2257,7 +2126,8 @@ function toast(msg){
 initFirebase();
 populateStockSelects();
 initSettings();
-initApiKeyUI();
+initBackendUrlUI();
+updateBackendBanner();
 renderTable();
 renderWatchlist();
 renderCalendar();
