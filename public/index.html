@@ -391,6 +391,10 @@ body.light select, body.light .form-group select, body.light .form-group input {
 
 <!-- ===== SCREENER ===== -->
 <div class="tab-content active" id="tab-screener">
+  <div id="apikey-banner" style="display:none;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:12px;font-family:var(--mono);color:var(--gold);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span>⚠ No API key set — live prices and news won't work. Add your key in <strong>Settings → API Key</strong>.</span>
+    <button class="btn btn-sm" onclick="switchTabById('settings')" style="border-color:var(--gold);color:var(--gold);white-space:nowrap;">Go to Settings ↗</button>
+  </div>
   <div class="live-bar">
     <div class="live-bar-left">
       <span class="live-icon">📡</span>
@@ -621,6 +625,23 @@ body.light select, body.light .form-group select, body.light .form-group input {
   <div class="panel">
     <div class="panel-header"><h2>Settings</h2></div>
     <div class="panel-body">
+      <div class="settings-section">
+        <h3>Anthropic API Key — Required for Live Prices &amp; News</h3>
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+          <label style="color:var(--text2);font-size:13px;">
+            Live price refresh and market news both use the Claude AI API. Enter your key below — it is saved only in this browser and never sent anywhere except Anthropic's servers.
+            <br><a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);font-size:11px;font-family:var(--mono);">Get a free API key at console.anthropic.com ↗</a>
+          </label>
+          <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap;">
+            <input type="password" id="apikey-input" placeholder="sk-ant-api03-…" 
+              style="flex:1;min-width:260px;padding:9px 12px;background:var(--navy);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;"
+              oninput="checkApiKeyInput()">
+            <button class="btn btn-accent" onclick="saveApiKey()" id="apikey-save-btn" style="padding:9px 18px;">Save Key</button>
+            <button class="btn" onclick="clearApiKey()" style="padding:9px 14px;">Clear</button>
+          </div>
+          <div id="apikey-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
+        </div>
+      </div>
       <div class="settings-section">
         <h3>Account & Cloud Sync</h3>
         <div class="setting-row">
@@ -1667,17 +1688,82 @@ function switchTabById(name){
 }
 
 // ════════════════════════════════════════════════════════════════
+// API KEY MANAGEMENT
+// Key is stored in localStorage — never leaves the browser except
+// in the Authorization header to api.anthropic.com
+// ════════════════════════════════════════════════════════════════
+
+function getApiKey() {
+  try { return localStorage.getItem('nse_anthropic_key') || ''; } catch(e) { return ''; }
+}
+function saveApiKey() {
+  const val = document.getElementById('apikey-input').value.trim();
+  if (!val.startsWith('sk-ant-')) {
+    document.getElementById('apikey-status').style.color = 'var(--red)';
+    document.getElementById('apikey-status').textContent = '⚠ That doesn\'t look like a valid Anthropic key (should start with sk-ant-)';
+    return;
+  }
+  try {
+    localStorage.setItem('nse_anthropic_key', val);
+    document.getElementById('apikey-status').style.color = 'var(--accent)';
+    document.getElementById('apikey-status').textContent = '✓ Key saved — prices and news will now work';
+    document.getElementById('apikey-input').value = val.slice(0,12) + '…' + val.slice(-4);
+    showApikeyBanner();
+    toast('✓ API key saved — click Refresh Prices to test');
+  } catch(e) {
+    document.getElementById('apikey-status').textContent = 'Could not save key: ' + e.message;
+  }
+}
+function clearApiKey() {
+  try { localStorage.removeItem('nse_anthropic_key'); } catch(e) {}
+  document.getElementById('apikey-input').value = '';
+  document.getElementById('apikey-status').style.color = 'var(--muted)';
+  document.getElementById('apikey-status').textContent = 'Key cleared.';
+  showApikeyBanner();
+}
+function checkApiKeyInput() {
+  const val = document.getElementById('apikey-input').value.trim();
+  const ok = val.startsWith('sk-ant-') && val.length > 20;
+  document.getElementById('apikey-save-btn').style.opacity = ok ? '1' : '0.5';
+}
+function showApikeyBanner() {
+  const key = getApiKey();
+  const banner = document.getElementById('apikey-banner');
+  if (!banner) return;
+  banner.style.display = key ? 'none' : 'flex';
+}
+function initApiKeyUI() {
+  const key = getApiKey();
+  if (key) {
+    document.getElementById('apikey-input').value = key.slice(0,12) + '…' + key.slice(-4);
+    document.getElementById('apikey-status').style.color = 'var(--accent)';
+    document.getElementById('apikey-status').textContent = '✓ Key loaded — ready to fetch prices and news';
+  }
+  showApikeyBanner();
+}
+
+// ════════════════════════════════════════════════════════════════
 // LIVE PRICE FETCHING — Claude API + web_search
 // Works from any browser with internet. No CORS issues.
 // Batches tickers in groups so the request stays within token limits.
 // ════════════════════════════════════════════════════════════════
 
+function buildAnthropicHeaders() {
+  const key = getApiKey();
+  if (!key) throw new Error('No API key set. Go to Settings → API Key to add your Anthropic key.');
+  return {
+    'Content-Type': 'application/json',
+    'x-api-key': key,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+}
+
 async function claudePriceBatch(tickers) {
-  // Ask Claude to web-search and return a JSON object of prices
   const tickerList = tickers.join(', ');
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+    headers: buildAnthropicHeaders(),
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
@@ -1691,9 +1777,9 @@ Required format:
   ...
 }
 
-- Search afx.kwayisi.org/nse or african-markets.com or investing.com for current NSE Kenya prices.
+- Search afx.kwayisi.org/nse or african-markets.com or nairobi-stocks.com for current NSE Kenya prices.
 - Prices must be in KES (Kenyan Shillings).
-- If a ticker price is genuinely unavailable, omit it (do not include null values).
+- If a ticker price is genuinely unavailable, omit it entirely.
 - Return ONLY the JSON object. No text before or after it.`,
       messages: [{
         role: 'user',
@@ -1704,7 +1790,10 @@ Required format:
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(`API error ${response.status}: ${err?.error?.message || response.statusText}`);
+    const msg = err?.error?.message || response.statusText;
+    if (response.status === 401) throw new Error('Invalid API key. Check your key in Settings → API Key.');
+    if (response.status === 429) throw new Error('Rate limited. Wait a moment then try again.');
+    throw new Error(`API error ${response.status}: ${msg}`);
   }
 
   const data = await response.json();
@@ -1713,18 +1802,26 @@ Required format:
     if (block.type === 'text') rawText += block.text;
   }
   rawText = rawText.replace(/```json|```/g, '').trim();
-
-  // Extract the first {...} block
   const match = rawText.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON object in response');
   return JSON.parse(match[0]);
 }
 
-// ── MAIN ORCHESTRATOR ─────────────────────────────────────────────
+// ── MAIN PRICE FETCH ORCHESTRATOR ────────────────────────────────
 async function fetchLivePrices() {
   if (isFetching) return;
-  isFetching = true;
 
+  // Check API key before doing anything
+  if (!getApiKey()) {
+    const statusEl = document.getElementById('live-status');
+    statusEl.className = 'live-status error';
+    statusEl.textContent = '⚠ No API key set — go to Settings → API Key to add your Anthropic key';
+    showApikeyBanner();
+    toast('⚠ Add your API key in Settings first');
+    return;
+  }
+
+  isFetching = true;
   const btn      = document.getElementById('refresh-btn');
   const icon     = document.getElementById('refresh-icon');
   const statusEl = document.getElementById('live-status');
@@ -1739,24 +1836,34 @@ async function fetchLivePrices() {
   const allTickers = STOCKS.map(s => s.ticker);
   const prices = {};
 
-  // Batch into groups of 25 to keep requests fast and within token limits
-  const BATCH = 25;
+  // Fetch all tickers in one batch (Claude handles pagination internally via web search)
+  const BATCH = 30;
   try {
     for (let i = 0; i < allTickers.length; i += BATCH) {
       const chunk = allTickers.slice(i, i + BATCH);
-      statusEl.textContent = `Fetching prices ${i + 1}–${Math.min(i + BATCH, allTickers.length)} of ${allTickers.length}…`;
+      const end = Math.min(i + BATCH, allTickers.length);
+      statusEl.textContent = `Fetching prices ${i + 1}–${end} of ${allTickers.length}…`;
       try {
         const result = await claudePriceBatch(chunk);
         Object.assign(prices, result);
       } catch(e) {
-        console.warn(`Batch ${i}–${i+BATCH} failed:`, e.message);
+        console.warn(`Batch ${i}–${end} failed:`, e.message);
+        // Surface key/auth errors immediately — no point continuing
+        if (e.message.includes('API key') || e.message.includes('Invalid')) {
+          statusEl.className = 'live-status error';
+          statusEl.textContent = '⚠ ' + e.message;
+          isFetching = false;
+          btn.disabled = false;
+          icon.innerHTML = '↻';
+          return;
+        }
       }
     }
   } catch(e) {
     console.error('Price fetch error:', e);
   }
 
-  // ── APPLY RESULTS ─────────────────────────────────────────────────
+  // ── APPLY RESULTS ───────────────────────────────────────────────
   const now = new Date();
   let updated = 0;
   for (const [ticker, info] of Object.entries(prices)) {
@@ -1781,16 +1888,15 @@ async function fetchLivePrices() {
     statusEl.className = 'live-status success';
     statusEl.textContent = `✓ ${updated}/${STOCKS.length} prices updated`;
     tsEl.textContent = `· NSE live data · ${now.toLocaleTimeString('en-KE', {timeZone:'Africa/Nairobi'})} EAT`;
-    // Reset baselines so metrics reflect the new prices as the new "open"
     _baseIndexValue = null;
     _baseMktCap = null;
     updateMarketMetrics();
     renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
-    toast(`✓ ${updated} stock prices updated`);
+    toast(`✓ ${updated} live prices updated`);
   } else {
     statusEl.className = 'live-status error';
-    statusEl.textContent = '⚠ Could not fetch prices. Check your internet connection.';
-    toast('Live fetch failed — static prices shown');
+    statusEl.textContent = '⚠ No prices returned. The API responded but found no data — try again.';
+    toast('Live fetch returned no data — try again');
   }
 
   isFetching = false;
@@ -1960,8 +2066,17 @@ function extractTickers(text) {
 let newsFetching = false;
 async function fetchMarketNews() {
   if (newsFetching) return;
-  newsFetching = true;
 
+  if (!getApiKey()) {
+    const statusEl = document.getElementById('news-status');
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '⚠ No API key set — go to Settings → API Key to add your Anthropic key';
+    showApikeyBanner();
+    return;
+  }
+
+  newsFetching = true;
   const btn      = document.getElementById('news-refresh-btn');
   const icon     = document.getElementById('news-refresh-icon');
   const statusEl = document.getElementById('news-status');
@@ -1981,7 +2096,7 @@ async function fetchMarketNews() {
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+      headers: buildAnthropicHeaders(),
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 3000,
@@ -2005,10 +2120,10 @@ Required format:
 ]
 
 Rules:
-- Return 8–12 news items, most recent first
+- Return 8-12 news items, most recent first
 - sentiment must be exactly one of: positive, negative, neutral
-- tickers must only include tickers from NSE Kenya (e.g. SCOM, KCB, EQTY, COOP, BAT, EABL, etc.)
-- If no relevant tickers, use an empty array []
+- tickers must only include real NSE Kenya tickers (e.g. SCOM, KCB, EQTY, COOP, BAT, EABL, SCBK, etc.)
+- If no relevant tickers apply, use an empty array []
 - Search businessdailyafrica.com, nation.africa, standardmedia.co.ke, reuters.com for Kenya/NSE content
 - Return ONLY the JSON array. Nothing else.`,
         messages: [{
@@ -2020,7 +2135,10 @@ Rules:
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(`API ${response.status}: ${errData?.error?.message || response.statusText}`);
+      const msg = errData?.error?.message || response.statusText;
+      if (response.status === 401) throw new Error('Invalid API key — check your key in Settings → API Key.');
+      if (response.status === 429) throw new Error('Rate limited — wait a moment and try again.');
+      throw new Error(`API ${response.status}: ${msg}`);
     }
 
     const data = await response.json();
@@ -2030,12 +2148,11 @@ Rules:
     }
     rawText = rawText.replace(/```json|```/g, '').trim();
 
-    // Extract the JSON array
     const arrMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!arrMatch) throw new Error('No JSON array in response');
+    if (!arrMatch) throw new Error('No JSON array in response — try again');
 
     const items = JSON.parse(arrMatch[0]);
-    if (!Array.isArray(items) || items.length === 0) throw new Error('No news items returned');
+    if (!Array.isArray(items) || items.length === 0) throw new Error('No news items returned — try again');
 
     gridEl.innerHTML = items.map(item => {
       const sentiment = item.sentiment || detectSentiment((item.headline||'') + ' ' + (item.summary||''));
@@ -2062,7 +2179,7 @@ Rules:
     statusEl.textContent = `⚠ ${err.message}`;
     gridEl.innerHTML = '';
     emptyEl.style.display = 'block';
-    emptyEl.innerHTML = '<span>📡</span>Could not load news. Check your internet connection and try again.';
+    emptyEl.innerHTML = `<span>📡</span>${err.message}`;
   } finally {
     newsFetching = false;
     btn.disabled = false;
@@ -2140,6 +2257,7 @@ function toast(msg){
 initFirebase();
 populateStockSelects();
 initSettings();
+initApiKeyUI();
 renderTable();
 renderWatchlist();
 renderCalendar();
