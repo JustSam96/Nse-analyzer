@@ -721,6 +721,22 @@ body.light select, body.light .form-group select, body.light .form-group input {
         </div>
       </div>
       <div class="settings-section">
+        <h3>Anthropic API Key — Required for AI Analyst &amp; Signal Engine</h3>
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+          <label style="color:var(--text2);font-size:13px;">
+            The AI Analyst chat and Signal Engine use the Claude AI API directly from your browser. Enter your key below — it is stored only in this browser.
+            <br><a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);font-size:11px;font-family:var(--mono);">Get a free key at console.anthropic.com ↗</a>
+          </label>
+          <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap;">
+            <input type="password" id="anthropic-key-input" placeholder="sk-ant-api03-…"
+              style="flex:1;min-width:260px;padding:9px 12px;background:var(--navy);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;">
+            <button class="btn btn-accent" onclick="saveAnthropicKey()" style="padding:9px 18px;">Save Key</button>
+            <button class="btn" onclick="clearAnthropicKey()" style="padding:9px 14px;">Clear</button>
+          </div>
+          <div id="anthropic-key-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
+        </div>
+      </div>
+      <div class="settings-section">
         <h3>Account & Cloud Sync</h3>
         <div class="setting-row">
           <label>Sign in to sync watchlist, portfolio & settings across devices</label>
@@ -1862,6 +1878,14 @@ function saveBackendUrl() {
     document.getElementById('backend-url-status').style.color = 'var(--accent)';
     document.getElementById('backend-url-status').textContent = '✓ Saved — click Refresh Prices to test';
     toast('✓ Backend URL saved');
+    // Hide the banner immediately now that a URL is configured
+    updateBackendBanner();
+    // Clear the screener error message if it was showing the "no backend" error
+    const liveStatus = document.getElementById('live-status');
+    if (liveStatus && liveStatus.textContent.includes('Backend not configured')) {
+      liveStatus.className = 'live-status';
+      liveStatus.textContent = '✓ Backend URL saved — click Refresh Prices to fetch live prices';
+    }
   } catch(e) {}
 }
 function initBackendUrlUI() {
@@ -1911,20 +1935,36 @@ async function fetchLivePrices() {
 
   try {
     const res = await fetch(`${backendUrl}/prices`, { signal: AbortSignal.timeout(30000) });
-    if (!res.ok) throw new Error(`Backend responded ${res.status}`);
+    if (!res.ok) throw new Error(`Backend responded ${res.status} — check your Render URL is correct`);
     const json = await res.json();
-    if (!json.ok) throw new Error(json.error || 'Backend error');
 
-    const prices = json.data;
+    // Support both { ok, data } and flat { TICKER: {...} } response shapes
+    let prices = {};
+    if (json.ok === true && json.data) {
+      prices = json.data;
+    } else if (json.ok === false) {
+      throw new Error(json.error || 'Backend returned an error');
+    } else if (typeof json === 'object' && !Array.isArray(json)) {
+      // Flat map — backend returned prices directly
+      prices = json;
+    }
+
     const now    = new Date();
     let updated  = 0;
 
     for (const [ticker, info] of Object.entries(prices)) {
-      if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
-      livePrices[ticker] = { price: info.price, change: info.change ?? 0, changePct: info.changePct ?? 0, fetchedAt: now };
+      if (!info || typeof info !== 'object') continue;
+      const price = parseFloat(info.price ?? info);
+      if (isNaN(price) || price <= 0) continue;
+      livePrices[ticker] = {
+        price,
+        change: parseFloat(info.change ?? 0),
+        changePct: parseFloat(info.changePct ?? 0),
+        fetchedAt: now
+      };
       const stock = STOCKS.find(s => s.ticker === ticker);
       if (stock) {
-        stock.price = info.price;
+        stock.price = price;
         const div = DIVIDENDS.find(d => d.ticker === ticker);
         if (div && stock.price > 0)
           stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
@@ -1941,14 +1981,14 @@ async function fetchLivePrices() {
       renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
       toast(`✓ ${updated} live NSE prices loaded`);
     } else {
-      throw new Error('Backend returned no usable prices');
+      throw new Error('Backend returned no usable prices — the backend may still be starting up (wait 30s and retry)');
     }
 
   } catch(err) {
     console.error('fetchLivePrices:', err);
     statusEl.className   = 'live-status error';
     statusEl.textContent = `⚠ ${err.message}`;
-    toast('Price fetch failed — check backend URL in Settings');
+    toast('Price fetch failed — ' + err.message.slice(0, 60));
   } finally {
     isFetching   = false;
     btn.disabled = false;
@@ -2258,6 +2298,47 @@ async function sendPasswordReset() {
 
 
 
+// ── ANTHROPIC API KEY MANAGEMENT ─────────────────────────────────
+// Required for: AI Analyst chat + Signal Engine (Steps 2 & 3)
+// Get a free key at console.anthropic.com/settings/keys
+function getAnthropicKey() {
+  try { return localStorage.getItem('nse_anthropic_key') || ''; } catch(e) { return ''; }
+}
+function saveAnthropicKey() {
+  const val = (document.getElementById('anthropic-key-input')?.value || '').trim();
+  if (!val.startsWith('sk-ant-')) {
+    document.getElementById('anthropic-key-status').style.color = 'var(--red)';
+    document.getElementById('anthropic-key-status').textContent = "⚠ Key should start with sk-ant- — paste your key from console.anthropic.com";
+    return;
+  }
+  try {
+    localStorage.setItem('nse_anthropic_key', val);
+    document.getElementById('anthropic-key-input').value = val.slice(0, 12) + '…' + val.slice(-4);
+    document.getElementById('anthropic-key-status').style.color = 'var(--accent)';
+    document.getElementById('anthropic-key-status').textContent = '✓ Key saved — AI Analyst and Signal Engine now active';
+    toast('✓ Anthropic key saved — AI features enabled');
+  } catch(e) {
+    document.getElementById('anthropic-key-status').textContent = 'Could not save: ' + e.message;
+  }
+}
+function clearAnthropicKey() {
+  try { localStorage.removeItem('nse_anthropic_key'); } catch(e) {}
+  document.getElementById('anthropic-key-input').value = '';
+  document.getElementById('anthropic-key-status').style.color = 'var(--muted)';
+  document.getElementById('anthropic-key-status').textContent = 'Key cleared.';
+}
+function initAnthropicKeyUI() {
+  const key = getAnthropicKey();
+  if (!key) return;
+  const input = document.getElementById('anthropic-key-input');
+  const status = document.getElementById('anthropic-key-status');
+  if (input) input.value = key.slice(0, 12) + '…' + key.slice(-4);
+  if (status) {
+    status.style.color = 'var(--accent)';
+    status.textContent = '✓ Key loaded — AI Analyst and Signal Engine ready';
+  }
+}
+
 // ── SIGNAL ENGINE ─────────────────────────────────────────────────
 
 let engineRunning = false;
@@ -2364,10 +2445,19 @@ async function runSignalEngine() {
     // Step 2 — fetch & summarise market news via AI + web search
     statusEl.textContent = 'Step 2/3 — Scanning NSE market news…';
     let newsSummary = 'No recent news retrieved.';
+    const anthropicKey = getAnthropicKey();
+    if (!anthropicKey) {
+      statusEl.textContent = 'Step 2/3 — No Anthropic key set (skipping news scan)';
+    } else {
     try {
       const newsRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
@@ -2377,16 +2467,22 @@ async function runSignalEngine() {
         })
       });
       const newsData = await newsRes.json();
+      if (newsData.error) throw new Error(newsData.error.message);
       newsSummary = newsData.content?.find(b => b.type === 'text')?.text || newsSummary;
       statusEl.textContent = 'Step 2/3 — ✓ Market news scanned';
     } catch(e) {
       statusEl.textContent = 'Step 2/3 — News scan failed, proceeding with fundamentals only';
+    }
     }
 
     await new Promise(r => setTimeout(r, 400));
 
     // Step 3 — AI analyses all scored stocks + news → ranked signal list
     statusEl.textContent = 'Step 3/3 — AI analysing signals…';
+
+    if (!anthropicKey) {
+      throw new Error('No Anthropic API key — add your key in Settings → Anthropic API Key to run the Signal Engine');
+    }
 
     const allScored = scored().sort((a, b) => b.score - a.score);
     const budget    = getBrokerBudget();
@@ -2446,13 +2542,24 @@ Return ONLY the JSON array. No preamble.`;
 
     const engineRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
         messages: [{ role: 'user', content: enginePrompt }]
       })
     });
+
+    if (!engineRes.ok) {
+      const errData = await engineRes.json().catch(() => ({}));
+      if (engineRes.status === 401) throw new Error('Invalid Anthropic API key — check your key in Settings');
+      throw new Error(`AI API error ${engineRes.status}: ${errData?.error?.message || engineRes.statusText}`);
+    }
 
     const engineData = await engineRes.json();
     const rawText = engineData.content?.find(b => b.type === 'text')?.text || '[]';
@@ -2791,6 +2898,12 @@ async function sendAiMessage() {
   if (!q) return;
   input.value = '';
 
+  const anthropicKey = getAnthropicKey();
+  if (!anthropicKey) {
+    appendAiMessage('bot', '⚠ No Anthropic API key set. Go to Settings → Anthropic API Key, paste your free key from console.anthropic.com, and save it. Then try again.');
+    return;
+  }
+
   appendAiMessage('user', q);
   aiHistory.push({ role: 'user', content: q });
 
@@ -2802,11 +2915,16 @@ async function sendAiMessage() {
 
   try {
     const systemPrompt = buildAiContext();
-    const messages = aiHistory.slice(-10); // keep last 10 turns for context
+    const messages = aiHistory.slice(-10);
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -2815,6 +2933,13 @@ async function sendAiMessage() {
       })
     });
 
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      if (resp.status === 401) throw new Error('Invalid API key — check your key in Settings');
+      if (resp.status === 429) throw new Error('Rate limited — wait a moment and try again');
+      throw new Error(`API error ${resp.status}: ${errData?.error?.message || resp.statusText}`);
+    }
+
     const data = await resp.json();
     const reply = data.content?.find(b => b.type === 'text')?.text || 'No response received.';
 
@@ -2822,13 +2947,12 @@ async function sendAiMessage() {
     thinkBubble.classList.remove('thinking');
     aiHistory.push({ role: 'assistant', content: reply });
 
-    // Keep history from growing too large
     if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
 
   } catch(e) {
-    thinkBubble.textContent = 'Error reaching AI. Please check your connection and try again.';
+    thinkBubble.textContent = `Error: ${e.message}`;
     thinkBubble.classList.remove('thinking');
-    aiHistory.pop(); // remove the failed user turn
+    aiHistory.pop();
   } finally {
     aiThinking = false;
     document.getElementById('ai-send-btn').disabled = false;
@@ -2855,6 +2979,7 @@ initFirebase();
 populateStockSelects();
 initSettings();
 initBackendUrlUI();
+initAnthropicKeyUI();
 updateBackendBanner();
 renderTable();
 renderWatchlist();
