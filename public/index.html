@@ -295,8 +295,83 @@ body.light select, body.light .form-group select, body.light .form-group input {
 .proj-table th { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px; }
 .proj-table tr:last-child td { border-bottom:none; }
 
-@media(max-width:600px){
-  .metrics { grid-template-columns:repeat(2,1fr); }
+/* AI ANALYST */
+.ai-tab-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+@media(max-width:700px){ .ai-tab-grid { grid-template-columns:1fr; } }
+.ai-context-card { background:var(--navy2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.ai-context-label { font-size:10px; color:var(--muted); font-family:var(--mono); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+.ai-context-val { font-size:13px; color:var(--text2); font-family:var(--mono); line-height:1.7; }
+.ai-chat-panel { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; backdrop-filter:blur(10px); }
+.ai-messages { min-height:180px; max-height:420px; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.ai-msg { display:flex; gap:10px; align-items:flex-start; }
+.ai-msg.user { flex-direction:row-reverse; }
+.ai-avatar { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; font-family:var(--mono); font-weight:600; flex-shrink:0; }
+.ai-avatar.bot { background:rgba(0,212,160,0.15); color:var(--accent); border:1px solid rgba(0,212,160,0.25); }
+.ai-avatar.usr { background:rgba(245,200,66,0.15); color:var(--gold); border:1px solid rgba(245,200,66,0.25); }
+.ai-bubble { max-width:82%; padding:10px 14px; border-radius:10px; font-size:13px; line-height:1.7; }
+.ai-bubble.bot { background:var(--navy2); color:var(--text); border:1px solid var(--border); border-top-left-radius:2px; white-space:pre-wrap; }
+.ai-bubble.usr { background:rgba(0,212,160,0.12); color:var(--text); border:1px solid rgba(0,212,160,0.2); border-top-right-radius:2px; }
+.ai-bubble.thinking { color:var(--muted); font-style:italic; }
+.ai-input-bar { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--border); background:var(--navy2); }
+.ai-input-bar input { flex:1; font-size:13px; padding:8px 12px; background:var(--navy); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--mono); }
+.ai-input-bar input:focus { outline:none; border-color:var(--accent); }
+.ai-input-bar button { font-size:12px; padding:8px 16px; background:var(--accent); color:var(--navy); border:none; border-radius:6px; cursor:pointer; font-family:var(--mono); font-weight:600; white-space:nowrap; transition:background 0.15s; }
+.ai-input-bar button:hover { background:var(--accent2); }
+.ai-input-bar button:disabled { opacity:0.45; cursor:not-allowed; }
+.ai-chips { display:flex; flex-wrap:wrap; gap:6px; padding:12px 16px; border-top:1px solid var(--border); }
+.ai-chip { font-size:11px; padding:4px 12px; border:1px solid var(--border); border-radius:20px; background:transparent; color:var(--text2); cursor:pointer; font-family:var(--mono); transition:all 0.15s; }
+.ai-chip:hover { border-color:var(--accent); color:var(--accent); }
+.ai-chip:disabled { opacity:0.4; cursor:not-allowed; }
+.ai-mode-bar { display:flex; gap:6px; padding:12px 16px 0; flex-wrap:wrap; }
+.ai-mode-btn { font-size:11px; padding:4px 12px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; font-family:var(--mono); transition:all 0.15s; }
+.ai-mode-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,212,160,0.08); }
+
+@media(max-width:600px){ .ai-bubble { max-width:95%; } }
+
+/* ── AI ENGINE / SIGNAL SCANNER ── */
+.engine-bar { display:flex; align-items:center; gap:10px; background:rgba(0,212,160,0.06); border:1px solid var(--border); border-radius:8px; padding:8px 14px; margin-bottom:14px; flex-wrap:wrap; }
+.engine-status { font-family:var(--mono); font-size:11px; }
+.engine-status.idle    { color:var(--muted); }
+.engine-status.running { color:var(--gold); }
+.engine-status.done    { color:var(--accent); }
+.engine-status.error   { color:var(--red); }
+.signal-feed { display:flex; flex-direction:column; gap:10px; }
+.signal-card { background:var(--navy2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.signal-card.sig-buy  { border-left:3px solid var(--accent); }
+.signal-card.sig-watch{ border-left:3px solid var(--gold); }
+.signal-card.sig-avoid{ border-left:3px solid var(--red); }
+.signal-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+.signal-ticker { font-family:var(--mono); font-size:15px; font-weight:500; color:var(--accent); }
+.signal-name { font-size:12px; color:var(--muted); }
+.signal-score { font-family:var(--mono); font-size:11px; color:var(--text2); margin-left:auto; }
+.signal-reasoning { font-size:12px; color:var(--text2); line-height:1.65; margin-bottom:10px; }
+.signal-news { font-size:11px; color:var(--muted); font-family:var(--mono); border-top:1px solid rgba(255,255,255,0.04); padding-top:8px; margin-bottom:10px; line-height:1.6; }
+.signal-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.btn-order { font-size:12px; padding:6px 14px; border:1px solid var(--accent); border-radius:6px; background:rgba(0,212,160,0.1); color:var(--accent); cursor:pointer; font-family:var(--mono); font-weight:500; transition:all 0.15s; }
+.btn-order:hover { background:rgba(0,212,160,0.2); }
+.btn-order.sell { border-color:var(--red); background:rgba(255,82,82,0.1); color:var(--red); }
+.btn-order.sell:hover { background:rgba(255,82,82,0.2); }
+
+/* ORDER MODAL */
+.order-modal { display:none; position:fixed; inset:0; background:rgba(5,15,30,0.92); z-index:600; align-items:center; justify-content:center; padding:16px; }
+.order-modal.open { display:flex; }
+.order-box { background:#0d1f3c; border:1px solid var(--border); border-radius:16px; max-width:500px; width:100%; padding:28px; position:relative; max-height:90vh; overflow-y:auto; }
+.order-close { position:absolute; top:14px; right:16px; background:none; border:none; font-size:18px; cursor:pointer; color:var(--muted); }
+.order-close:hover { color:var(--text); }
+.order-title { font-size:16px; font-weight:600; margin-bottom:4px; }
+.order-sub { font-size:11px; color:var(--muted); font-family:var(--mono); margin-bottom:18px; }
+.order-brief { background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:14px; font-size:12px; font-family:var(--mono); line-height:1.8; color:var(--text2); margin-bottom:16px; white-space:pre-wrap; }
+.order-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.order-actions button { flex:1; min-width:120px; padding:10px; font-size:12px; font-family:var(--mono); border-radius:8px; cursor:pointer; transition:all 0.15s; }
+.btn-copy-order { background:var(--accent); color:var(--navy); border:none; font-weight:600; }
+.btn-copy-order:hover { background:var(--accent2); }
+.btn-email-order { background:transparent; border:1px solid var(--border); color:var(--text2); }
+.btn-email-order:hover { border-color:var(--accent); color:var(--accent); }
+.btn-wa-order { background:rgba(37,211,102,0.15); border:1px solid rgba(37,211,102,0.3); color:#25d366; }
+.btn-wa-order:hover { background:rgba(37,211,102,0.25); }
+.engine-controls { display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; }
+.auto-badge { font-size:10px; font-family:var(--mono); padding:2px 8px; border-radius:10px; background:rgba(0,212,160,0.12); color:var(--accent); border:1px solid rgba(0,212,160,0.2); }
+.auto-badge.off { background:rgba(136,153,170,0.1); color:var(--muted); border-color:rgba(136,153,170,0.2); }
   thead th:nth-child(4),tbody td:nth-child(4),
   thead th:nth-child(7),tbody td:nth-child(7),
   thead th:nth-child(8),tbody td:nth-child(8) { display:none; }
@@ -386,6 +461,8 @@ body.light select, body.light .form-group select, body.light .form-group input {
   <div class="tab" onclick="switchTab('portfolio',this)">Portfolio</div>
   <div class="tab" onclick="switchTab('alerts',this)">Price Alerts</div>
   <div class="tab" onclick="switchTab('news',this)">Market News</div>
+  <div class="tab" onclick="switchTab('engine',this)">⚡ Signal Engine</div>
+  <div class="tab" onclick="switchTab('ai',this)">✦ AI Analyst</div>
   <div class="tab" onclick="switchTab('settings',this)">Settings</div>
 </div>
 
@@ -692,6 +769,84 @@ body.light select, body.light .form-group select, body.light .form-group input {
           <button class="btn btn-sm btn-red" onclick="clearAll()">Reset</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SIGNAL ENGINE ===== -->
+<div class="tab-content" id="tab-engine">
+
+  <!-- Engine control bar -->
+  <div class="engine-bar">
+    <span style="font-size:14px;">⚡</span>
+    <span style="font-size:12px;font-family:var(--mono);color:var(--text2);">AI Signal Engine</span>
+    <span class="engine-status idle" id="engine-status">Idle — click Scan to analyse all NSE stocks</span>
+    <div class="engine-controls">
+      <span class="auto-badge off" id="auto-badge">AUTO: OFF</span>
+      <button class="btn btn-sm" id="auto-toggle-btn" onclick="toggleAutoScan()">Enable Auto-Scan</button>
+      <button class="btn btn-sm" id="engine-scan-btn" onclick="runSignalEngine()">⚡ Scan Now</button>
+    </div>
+  </div>
+
+  <!-- Broker settings bar -->
+  <div style="background:rgba(245,200,66,0.06);border:1px solid rgba(245,200,66,0.2);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span style="font-size:11px;font-family:var(--mono);color:var(--gold);">📋 Faida IB Contact</span>
+    <input type="email" id="broker-email" placeholder="broker@faida.co.ke" style="font-size:12px;padding:5px 10px;background:var(--navy);border:1px solid rgba(245,200,66,0.3);border-radius:6px;color:var(--text);font-family:var(--mono);width:200px;">
+    <input type="tel" id="broker-wa" placeholder="+254 7XX XXX XXX (WhatsApp)" style="font-size:12px;padding:5px 10px;background:var(--navy);border:1px solid rgba(245,200,66,0.3);border-radius:6px;color:var(--text);font-family:var(--mono);width:220px;">
+    <input type="number" id="broker-budget" placeholder="Budget per trade (KES)" style="font-size:12px;padding:5px 10px;background:var(--navy);border:1px solid rgba(245,200,66,0.3);border-radius:6px;color:var(--text);font-family:var(--mono);width:190px;" min="1000" step="1000">
+    <button class="btn btn-sm" style="border-color:var(--gold);color:var(--gold);" onclick="saveBrokerSettings()">Save</button>
+  </div>
+
+  <!-- Signal feed -->
+  <div id="engine-empty" style="text-align:center;padding:48px 20px;color:var(--muted);font-family:var(--mono);font-size:13px;">
+    <div style="font-size:32px;margin-bottom:12px;opacity:0.3;">⚡</div>
+    Click "Scan Now" to run the AI Signal Engine.<br>
+    It fetches live prices, scans market news, and analyses every NSE stock<br>
+    to generate ranked Buy / Watch / Avoid signals with one-click broker instructions.
+  </div>
+  <div class="signal-feed" id="signal-feed" style="display:none;"></div>
+</div>
+
+<!-- ORDER INSTRUCTION MODAL -->
+<div class="order-modal" id="order-modal" onclick="closeOrderModal(event)">
+  <div class="order-box">
+    <button class="order-close" onclick="document.getElementById('order-modal').classList.remove('open')">&#x2715;</button>
+    <div id="order-content"></div>
+  </div>
+</div>
+
+<!-- ===== AI ANALYST ===== -->
+<div class="tab-content" id="tab-ai">
+  <div class="ai-tab-grid" id="ai-context-grid">
+    <div class="ai-context-card">
+      <div class="ai-context-label">Portfolio context <span id="ai-port-count" style="color:var(--accent);">0 holdings</span></div>
+      <div class="ai-context-val" id="ai-port-summary">No holdings yet — add stocks in the Portfolio tab to get personalised analysis.</div>
+    </div>
+    <div class="ai-context-card">
+      <div class="ai-context-label">Market snapshot <span style="font-size:9px;color:var(--muted);">from screener data</span></div>
+      <div class="ai-context-val" id="ai-market-summary">—</div>
+    </div>
+  </div>
+
+  <div class="ai-chat-panel">
+    <div class="ai-mode-bar">
+      <button class="ai-mode-btn active" id="mode-portfolio" onclick="setAiMode('portfolio')">My Portfolio</button>
+      <button class="ai-mode-btn" id="mode-screener" onclick="setAiMode('screener')">NSE Screener</button>
+      <button class="ai-mode-btn" id="mode-dividends" onclick="setAiMode('dividends')">Dividends</button>
+      <button class="ai-mode-btn" id="mode-general" onclick="setAiMode('general')">General NSE</button>
+    </div>
+    <div class="ai-messages" id="ai-messages">
+      <div class="ai-msg">
+        <div class="ai-avatar bot">AI</div>
+        <div class="ai-bubble bot">Hello! I'm your NSE AI Analyst. I have full context of your portfolio, watchlist, and all NSE screener data.
+
+Switch modes above to focus my analysis — ask about your portfolio performance, dividend opportunities, top-ranked screener picks, or general NSE strategy. What would you like to explore?</div>
+      </div>
+    </div>
+    <div class="ai-chips" id="ai-chips-bar"></div>
+    <div class="ai-input-bar">
+      <input type="text" id="ai-user-input" placeholder="Ask anything about NSE, your portfolio, dividends…" onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendAiMessage()">
+      <button id="ai-send-btn" onclick="sendAiMessage()">Send ↗</button>
     </div>
   </div>
 </div>
@@ -1682,7 +1837,7 @@ function switchTab(name,el){
   if(name==='alerts')renderAlerts();
 }
 function switchTabById(name){
-  const tabNames=['screener','watchlist','calendar','portfolio','alerts','news','settings'];
+  const tabNames=['screener','watchlist','calendar','portfolio','alerts','news','engine','ai','settings'];
   const tabs=document.querySelectorAll('.tab');
   const idx=tabNames.indexOf(name);
   if(idx>=0)switchTab(name,tabs[idx]);
@@ -2101,10 +2256,618 @@ async function sendPasswordReset() {
   } catch(e) { toast('Reset failed: ' + e.message); }
 }
 
-// switchTab and renderPortfolio are patched inline below after declaration
 
-// ── INIT THEME ───────────────────────────────────────────────────
+
+// ── SIGNAL ENGINE ─────────────────────────────────────────────────
+
+let engineRunning = false;
+let autoScanEnabled = false;
+let autoScanTimer = null;
+let lastSignals = [];
+
+function saveBrokerSettings() {
+  const email  = document.getElementById('broker-email').value.trim();
+  const wa     = document.getElementById('broker-wa').value.trim();
+  const budget = document.getElementById('broker-budget').value.trim();
+  try {
+    localStorage.setItem('nse_broker_email',  email);
+    localStorage.setItem('nse_broker_wa',     wa);
+    localStorage.setItem('nse_broker_budget', budget);
+  } catch(e) {}
+  toast('✓ Broker settings saved');
+}
+
+function loadBrokerSettings() {
+  try {
+    const email  = localStorage.getItem('nse_broker_email');
+    const wa     = localStorage.getItem('nse_broker_wa');
+    const budget = localStorage.getItem('nse_broker_budget');
+    if (email)  document.getElementById('broker-email').value  = email;
+    if (wa)     document.getElementById('broker-wa').value     = wa;
+    if (budget) document.getElementById('broker-budget').value = budget;
+  } catch(e) {}
+}
+
+function getBrokerEmail()  { try { return localStorage.getItem('nse_broker_email')  || ''; } catch(e) { return ''; } }
+function getBrokerWa()     { try { return localStorage.getItem('nse_broker_wa')     || ''; } catch(e) { return ''; } }
+function getBrokerBudget() { try { return parseFloat(localStorage.getItem('nse_broker_budget')) || 50000; } catch(e) { return 50000; } }
+
+function toggleAutoScan() {
+  autoScanEnabled = !autoScanEnabled;
+  const badge = document.getElementById('auto-badge');
+  const btn   = document.getElementById('auto-toggle-btn');
+  if (autoScanEnabled) {
+    badge.textContent = 'AUTO: ON';
+    badge.className   = 'auto-badge';
+    btn.textContent   = 'Disable Auto-Scan';
+    toast('✓ Auto-scan enabled — engine will run every 15 min during market hours');
+    autoScanTimer = setInterval(() => {
+      const t = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+      const inHours = t.getDay()>=1 && t.getDay()<=5 && (t.getHours()>9||(t.getHours()===9&&t.getMinutes()>=30)) && t.getHours()<15;
+      if (inHours) runSignalEngine();
+    }, 15 * 60 * 1000);
+  } else {
+    badge.textContent = 'AUTO: OFF';
+    badge.className   = 'auto-badge off';
+    btn.textContent   = 'Enable Auto-Scan';
+    clearInterval(autoScanTimer);
+    toast('Auto-scan disabled');
+  }
+}
+
+async function runSignalEngine() {
+  if (engineRunning) return;
+  engineRunning = true;
+
+  const statusEl = document.getElementById('engine-status');
+  const scanBtn  = document.getElementById('engine-scan-btn');
+  const feedEl   = document.getElementById('signal-feed');
+  const emptyEl  = document.getElementById('engine-empty');
+
+  scanBtn.disabled = true;
+  emptyEl.style.display = 'none';
+  feedEl.style.display  = 'none';
+  statusEl.className    = 'engine-status running';
+
+  try {
+    // Step 1 — fetch live prices if backend configured
+    statusEl.textContent = 'Step 1/3 — Fetching live NSE prices…';
+    const backendUrl = getBackendUrl();
+    if (backendUrl && backendUrl !== 'YOUR_RENDER_URL_HERE') {
+      try {
+        const res  = await fetch(`${backendUrl}/prices`, { signal: AbortSignal.timeout(20000) });
+        const json = await res.json();
+        if (json.ok) {
+          for (const [ticker, info] of Object.entries(json.data || {})) {
+            if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
+            livePrices[ticker] = { price: info.price, change: info.change ?? 0, changePct: info.changePct ?? 0 };
+            const stock = STOCKS.find(s => s.ticker === ticker);
+            if (stock) {
+              stock.price = info.price;
+              const div = DIVIDENDS.find(d => d.ticker === ticker);
+              if (div && stock.price > 0)
+                stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
+            }
+          }
+          const n = Object.keys(json.data || {}).length;
+          statusEl.textContent = `Step 1/3 — ✓ ${n} live prices loaded`;
+        }
+      } catch(e) {
+        statusEl.textContent = 'Step 1/3 — Backend unavailable, using last known prices';
+      }
+    } else {
+      statusEl.textContent = 'Step 1/3 — Using static prices (no backend configured)';
+    }
+
+    await new Promise(r => setTimeout(r, 400));
+
+    // Step 2 — fetch & summarise market news via AI + web search
+    statusEl.textContent = 'Step 2/3 — Scanning NSE market news…';
+    let newsSummary = 'No recent news retrieved.';
+    try {
+      const newsRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          system: 'You are an NSE market analyst. Search for the latest NSE Kenya stock market news from today. Return a concise plain-text summary (max 300 words) covering: key movers, sector trends, any earnings announcements, macroeconomic news affecting the NSE, and any dividend announcements. Mention specific tickers where relevant. Plain text only, no markdown.',
+          messages: [{ role: 'user', content: 'Search for latest NSE Kenya stock market news today and summarise key developments affecting stock signals.' }]
+        })
+      });
+      const newsData = await newsRes.json();
+      newsSummary = newsData.content?.find(b => b.type === 'text')?.text || newsSummary;
+      statusEl.textContent = 'Step 2/3 — ✓ Market news scanned';
+    } catch(e) {
+      statusEl.textContent = 'Step 2/3 — News scan failed, proceeding with fundamentals only';
+    }
+
+    await new Promise(r => setTimeout(r, 400));
+
+    // Step 3 — AI analyses all scored stocks + news → ranked signal list
+    statusEl.textContent = 'Step 3/3 — AI analysing signals…';
+
+    const allScored = scored().sort((a, b) => b.score - a.score);
+    const budget    = getBrokerBudget();
+    const portSummary = portfolio.length
+      ? portfolio.map(h => {
+          const s = STOCKS.find(x => x.ticker === h.ticker) || {};
+          const lp = livePrices[h.ticker]?.price || s.price || 0;
+          const pnl = ((lp - h.buyPrice) / h.buyPrice * 100).toFixed(1);
+          return `${h.ticker}: ${h.shares} shares, bought @ KES ${h.buyPrice}, now KES ${lp.toFixed(2)}, P&L ${pnl}%`;
+        }).join('\n')
+      : 'No existing holdings.';
+
+    const stockList = allScored.slice(0, 40).map(s =>
+      `${s.ticker}|${s.name}|${s.sector}|KES ${s.price.toFixed(2)}|yield ${s.yield}%|score ${s.score}|signal ${s.signal}|P/E ${s.pe}|payout ${s.payout}%|${s.cons}yr streak`
+    ).join('\n');
+
+    const upcomingDivs = DIVIDENDS
+      .filter(d => new Date(d.exDate) >= new Date())
+      .sort((a, b) => new Date(a.exDate) - new Date(b.exDate))
+      .slice(0, 6)
+      .map(d => `${d.ticker} KES ${d.amount} ex-date ${d.exDate}`)
+      .join(', ');
+
+    const enginePrompt = `You are an expert NSE Kenya AI trading analyst. Analyse the provided stock data, market news, and portfolio context to produce a ranked list of actionable trade signals.
+
+TASK: Return ONLY valid JSON — an array of signal objects, no other text, no markdown fences.
+
+Each object must have:
+- ticker: string
+- name: string  
+- sector: string
+- price: number (KES)
+- signal: "BUY" | "WATCH" | "AVOID"
+- confidence: "HIGH" | "MEDIUM" | "LOW"
+- reasoning: string (2-3 sentences, plain text, specific and data-driven)
+- newsImpact: string (1 sentence about any relevant news, or "No specific news" if none)
+- suggestedShares: number (based on budget of KES ${budget.toLocaleString()}, rounded to nearest 100)
+- suggestedLimitPrice: number (KES, 0-2% below current for buys, round to 2 decimal places)
+- action: "BUY" | "SELL" | "HOLD" | "WATCH"
+- urgency: "IMMEDIATE" | "THIS_WEEK" | "MONITOR"
+
+Return exactly 15 stocks: the top 5 BUY signals, top 5 WATCH, and top 5 to AVOID. Rank by conviction. Factor in: screener score, dividend yield, news sentiment, upcoming ex-dividend dates, and portfolio concentration.
+
+SCREENER DATA (top 40 by score):
+${stockList}
+
+UPCOMING DIVIDENDS: ${upcomingDivs}
+
+CURRENT PORTFOLIO:
+${portSummary}
+Budget per trade: KES ${budget.toLocaleString()}
+
+MARKET NEWS (just scanned):
+${newsSummary}
+
+Return ONLY the JSON array. No preamble.`;
+
+    const engineRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: enginePrompt }]
+      })
+    });
+
+    const engineData = await engineRes.json();
+    const rawText = engineData.content?.find(b => b.type === 'text')?.text || '[]';
+    let signals = [];
+    try {
+      const clean = rawText.replace(/```json|```/g, '').trim();
+      signals = JSON.parse(clean);
+    } catch(e) {
+      throw new Error('AI returned malformed signal data — please try again');
+    }
+
+    lastSignals = signals;
+    statusEl.className   = 'engine-status done';
+    statusEl.textContent = `✓ Scan complete — ${signals.length} signals · ${new Date().toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi' })} EAT`;
+
+    renderSignalFeed(signals);
+    renderTable(); renderWatchlist(); updateMarketMetrics(); updateAiContextCards();
+    toast(`⚡ Signal scan complete — ${signals.filter(s => s.signal === 'BUY').length} buy signals found`);
+
+  } catch(err) {
+    statusEl.className   = 'engine-status error';
+    statusEl.textContent = `⚠ Scan failed: ${err.message}`;
+    emptyEl.style.display = 'block';
+    toast('⚠ Signal scan failed — ' + err.message);
+  } finally {
+    engineRunning    = false;
+    scanBtn.disabled = false;
+  }
+}
+
+function renderSignalFeed(signals) {
+  const feedEl  = document.getElementById('signal-feed');
+  const emptyEl = document.getElementById('engine-empty');
+  emptyEl.style.display = 'none';
+  feedEl.style.display  = 'flex';
+
+  const order = { BUY: 0, WATCH: 1, AVOID: 2 };
+  const sorted = [...signals].sort((a, b) => order[a.signal] - order[b.signal]);
+
+  feedEl.innerHTML = sorted.map(s => {
+    const sigClass   = s.signal === 'BUY' ? 'sig-buy' : s.signal === 'WATCH' ? 'sig-watch' : 'sig-avoid';
+    const sigColor   = s.signal === 'BUY' ? 'var(--accent)' : s.signal === 'WATCH' ? 'var(--gold)' : 'var(--red)';
+    const confColor  = s.confidence === 'HIGH' ? 'var(--accent)' : s.confidence === 'MEDIUM' ? 'var(--gold)' : 'var(--muted)';
+    const urgLabel   = s.urgency === 'IMMEDIATE' ? '🔴 Immediate' : s.urgency === 'THIS_WEEK' ? '🟡 This week' : '⚪ Monitor';
+    const inPort     = portfolio.some(h => h.ticker === s.ticker);
+    const portBadge  = inPort ? `<span style="font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:10px;background:rgba(0,212,160,0.1);color:var(--accent);border:1px solid rgba(0,212,160,0.2);">In portfolio</span>` : '';
+
+    const buyBtn  = s.signal === 'BUY'
+      ? `<button class="btn-order" onclick="openOrderModal('${s.ticker}','BUY')">📋 Draft Buy Order</button>`
+      : '';
+    const sellBtn = inPort
+      ? `<button class="btn-order sell" onclick="openOrderModal('${s.ticker}','SELL')">📋 Draft Sell Order</button>`
+      : '';
+    const watchBtn = `<button class="btn btn-sm" onclick="toggleWatch('${s.ticker}');this.textContent=watchlist.includes('${s.ticker}')?'★ Watching':'☆ Watch'">
+      ${watchlist.includes(s.ticker) ? '★ Watching' : '☆ Watch'}
+    </button>`;
+    const detailBtn = `<button class="btn btn-sm" onclick="showDetail('${s.ticker}')">Detail ↗</button>`;
+
+    return `<div class="signal-card ${sigClass}">
+      <div class="signal-top">
+        <span class="signal-ticker">${s.ticker}</span>
+        <span class="signal-name">${s.name} · ${s.sector}</span>
+        ${portBadge}
+        <span class="signal-score" style="margin-left:auto;">
+          <span style="color:${sigColor};font-weight:500;">${s.signal}</span>
+          &nbsp;·&nbsp;
+          <span style="color:${confColor};">${s.confidence}</span>
+          &nbsp;·&nbsp; ${urgLabel}
+        </span>
+      </div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:6px;">
+        KES ${s.price?.toFixed(2) ?? '—'} &nbsp;|&nbsp; Suggested: ${s.suggestedShares?.toLocaleString() ?? '—'} shares @ KES ${s.suggestedLimitPrice?.toFixed(2) ?? '—'} limit
+      </div>
+      <div class="signal-reasoning">${s.reasoning}</div>
+      ${s.newsImpact && s.newsImpact !== 'No specific news'
+        ? `<div class="signal-news">📰 ${s.newsImpact}</div>` : ''}
+      <div class="signal-actions">${buyBtn}${sellBtn}${watchBtn}${detailBtn}</div>
+    </div>`;
+  }).join('');
+}
+
+function openOrderModal(ticker, side) {
+  const s      = scored().find(x => x.ticker === ticker);
+  if (!s) return;
+  const budget = getBrokerBudget();
+  const sig    = lastSignals.find(x => x.ticker === ticker) || {};
+  const shares = sig.suggestedShares || Math.floor(budget / s.price / 100) * 100 || 100;
+  const limit  = side === 'BUY'
+    ? (sig.suggestedLimitPrice || (s.price * 0.99))
+    : s.price;
+  const total  = (shares * limit).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const today  = new Date().toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const divEntry = DIVIDENDS.find(d => d.ticker === ticker);
+  const divLine  = divEntry ? `Upcoming ex-dividend: ${divEntry.exDate} (KES ${divEntry.amount}/share)\n` : '';
+
+  const brief = `═══════════════════════════════
+FAIDA INVESTMENT BANK
+TRADE INSTRUCTION — ${today}
+═══════════════════════════════
+
+CLIENT: [Your Full Name]
+CDS ACCOUNT: [Your CDS Number]
+ORDER TYPE: ${side} — LIMIT ORDER
+
+STOCK: ${s.ticker} — ${s.name}
+SECTOR: ${s.sector}
+NSE BOARD: Main Investment Market
+
+ACTION: ${side}
+QUANTITY: ${shares.toLocaleString()} shares
+LIMIT PRICE: KES ${limit.toFixed(2)} per share
+TOTAL VALUE: KES ${total}
+VALIDITY: Good Till Cancelled (GTC)
+
+${divLine}AI SIGNAL: ${sig.signal || side} | Confidence: ${sig.confidence || 'MEDIUM'}
+SCREENER SCORE: ${s.score}/100 | Yield: ${s.yield}%
+
+REASONING:
+${sig.reasoning || 'Based on screener signal and current market conditions.'}
+
+INSTRUCTIONS TO BROKER:
+Please place the above limit ${side.toLowerCase()} order for my account at your earliest convenience during NSE trading hours (09:30–15:00 EAT, Mon–Fri).
+
+Regards,
+[Your Name]
+[Your Phone Number]
+═══════════════════════════════`;
+
+  const email  = getBrokerEmail();
+  const wa     = getBrokerWa();
+  const waNum  = wa.replace(/\D/g, '');
+  const waText = encodeURIComponent(`*TRADE INSTRUCTION — ${today}*\n\nDear Faida IB,\n\nPlease ${side} *${shares.toLocaleString()} shares* of *${s.ticker} (${s.name})* at a limit price of *KES ${limit.toFixed(2)}* per share (Total: KES ${total}).\n\nCDS Account: [Your CDS Number]\nValidity: GTC\n\nAI Signal: ${sig.signal || side} | Score: ${s.score}/100\n\nThank you.`);
+  const mailSubj = encodeURIComponent(`Trade Instruction — ${side} ${s.ticker} — ${today}`);
+  const mailBody = encodeURIComponent(brief);
+
+  document.getElementById('order-content').innerHTML = `
+    <div class="order-title">${side} Order — ${s.ticker}</div>
+    <div class="order-sub">${s.name} · KES ${limit.toFixed(2)} × ${shares.toLocaleString()} shares = KES ${total}</div>
+    <div class="order-brief">${brief}</div>
+    <div class="order-actions">
+      <button class="btn-copy-order" onclick="navigator.clipboard.writeText(document.querySelector('.order-brief').textContent).then(()=>toast('✓ Order copied to clipboard'))">📋 Copy Order</button>
+      ${email ? `<button class="btn-email-order" onclick="window.open('mailto:${email}?subject=${mailSubj}&body=${mailBody}','_blank')">✉ Open in Email</button>` : ''}
+      ${waNum ? `<button class="btn-wa-order" onclick="window.open('https://wa.me/${waNum}?text=${waText}','_blank')">💬 Send via WhatsApp</button>` : ''}
+    </div>
+    ${!email && !wa ? `<p style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:12px;">Add your broker's email and WhatsApp above to enable one-click send.</p>` : ''}
+  `;
+  document.getElementById('order-modal').classList.add('open');
+}
+
+function closeOrderModal(e) {
+  if (e.target === document.getElementById('order-modal'))
+    document.getElementById('order-modal').classList.remove('open');
+}
+
+// ── AI ANALYST ────────────────────────────────────────────────────
 initTheme();
+
+let aiMode = 'portfolio';
+let aiHistory = [];
+let aiThinking = false;
+
+const AI_CHIPS = {
+  portfolio: [
+    'How is my portfolio performing?',
+    'Which holding has the best yield on cost?',
+    'Am I over-concentrated in any sector?',
+    'Which position should I consider trimming?',
+    'What is my total expected dividend income?',
+  ],
+  screener: [
+    'What are the top 5 dividend stocks right now?',
+    'Which Banking stocks have the best scores?',
+    'Show me high-yield low-payout-ratio picks',
+    'Which stocks have the longest dividend streaks?',
+    'What are the best value picks by P/E?',
+  ],
+  dividends: [
+    'Which dividends are coming up next?',
+    'What is the highest-yielding upcoming payout?',
+    'Rank upcoming dividends by total payout size',
+    'Which ex-dividend dates should I not miss?',
+    'Which stocks pay the most consistent dividends?',
+  ],
+  general: [
+    'How does the NSE dividend market compare globally?',
+    'What sectors are dominant on the NSE?',
+    'Explain payout ratio risk for NSE stocks',
+    'Tips for building a KES dividend income portfolio',
+    'What is a safe dividend yield on the NSE?',
+  ],
+};
+
+function setAiMode(mode) {
+  aiMode = mode;
+  document.querySelectorAll('.ai-mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + mode).classList.add('active');
+  renderAiChips();
+}
+
+function renderAiChips() {
+  const bar = document.getElementById('ai-chips-bar');
+  const chips = AI_CHIPS[aiMode] || [];
+  bar.innerHTML = chips.map(c =>
+    `<button class="ai-chip" onclick="useChip(this)" ${aiThinking ? 'disabled' : ''}>${c}</button>`
+  ).join('');
+}
+
+function useChip(el) {
+  document.getElementById('ai-user-input').value = el.textContent;
+  sendAiMessage();
+}
+
+function buildAiContext() {
+  // Portfolio context
+  const portLines = portfolio.map(h => {
+    const s = STOCKS.find(x => x.ticker === h.ticker) || {};
+    const lp = livePrices[h.ticker] || s.price || 0;
+    const bookVal = (h.shares * h.buyPrice).toFixed(0);
+    const mktVal = (h.shares * lp).toFixed(0);
+    const pnl = ((lp - h.buyPrice) / h.buyPrice * 100).toFixed(1);
+    const yoc = s.yield ? (s.yield).toFixed(1) : '0';
+    return `${h.ticker} (${s.name||h.ticker}): ${h.shares} shares @ KES ${h.buyPrice}, current ~KES ${lp.toFixed(2)}, book KES ${bookVal}, mkt KES ${mktVal}, P&L ${pnl}%, div yield ${yoc}%, sector: ${s.sector||'—'}`;
+  });
+
+  // Top screener stocks
+  const scored = STOCKS.map(s => {
+    const p = livePrices[s.ticker] || s.price;
+    const yScore = Math.min(s.yield / 15 * 100, 100) * (CFG.weights.y / 100);
+    const cScore = Math.min(s.cons / 15 * 100, 100) * (CFG.weights.c / 100);
+    const pScore = s.payout > 0 && s.payout < 80 ? (1 - Math.abs(s.payout - 50) / 50) * 100 * (CFG.weights.p / 100) : 0;
+    const peScore = s.pe > 0 ? Math.max(0, (1 - (s.pe - 5) / 25)) * 100 * (CFG.weights.pe / 100) : 0;
+    return { ...s, score: Math.round(yScore + cScore + pScore + peScore), price: p };
+  }).sort((a, b) => b.score - a.score);
+
+  const topBuys = scored.filter(s => s.score >= CFG.minScore && s.yield >= CFG.minYield).slice(0, 10);
+  const topLines = topBuys.map(s =>
+    `${s.ticker} (${s.name}): score ${s.score}, yield ${s.yield}%, P/E ${s.pe||'—'}, payout ${s.payout||0}%, ${s.cons} yr streak, sector ${s.sector}`
+  );
+
+  // Upcoming dividends
+  const today = new Date();
+  const upcomingDivs = DIVIDENDS.filter(d => new Date(d.exDate) >= today)
+    .sort((a, b) => new Date(a.exDate) - new Date(b.exDate))
+    .slice(0, 8)
+    .map(d => `${d.ticker}: KES ${d.amount} ${d.type}, ex-date ${d.exDate}, pay-date ${d.payDate}`);
+
+  // Watchlist
+  const watchLines = watchlist.slice(0, 10).map(t => {
+    const s = STOCKS.find(x => x.ticker === t) || {};
+    return `${t} (${s.name||t}): KES ${(livePrices[t]||s.price||0).toFixed(2)}, yield ${s.yield||0}%`;
+  });
+
+  const totalPortValue = portfolio.reduce((sum, h) => {
+    const lp = livePrices[h.ticker] || (STOCKS.find(x => x.ticker === h.ticker)||{}).price || 0;
+    return sum + h.shares * lp;
+  }, 0);
+  const totalBook = portfolio.reduce((sum, h) => sum + h.shares * h.buyPrice, 0);
+
+  return `You are an expert NSE (Nairobi Securities Exchange) stock analyst and dividend investment advisor. You have deep knowledge of Kenyan equity markets, KES currency, CMA regulations, and NSE-listed companies. Be concise, specific, and data-driven. Use plain text only — no markdown symbols like **, ##, or bullet dashes. Use short numbered lists or line breaks instead.
+
+CURRENT DATE: ${new Date().toLocaleDateString('en-KE', {timeZone:'Africa/Nairobi'})}
+USER'S PORTFOLIO (${portfolio.length} holdings):
+${portLines.length ? portLines.join('\n') : 'No holdings added yet.'}
+Total portfolio book value: KES ${totalBook.toLocaleString()}
+Total portfolio market value: ~KES ${Math.round(totalPortValue).toLocaleString()}
+
+WATCHLIST (${watchlist.length} stocks): ${watchlist.join(', ') || 'Empty'}
+
+TOP BUY SIGNALS FROM SCREENER (score >= ${CFG.minScore}, yield >= ${CFG.minYield}%):
+${topLines.length ? topLines.join('\n') : 'None at current thresholds.'}
+
+ALL NSE STOCKS TOTAL: ${STOCKS.length} listed
+MARKET: NSE 20 Index ~3,588 | Total market cap ~KES 3.44T
+SCREENING THRESHOLDS: min yield ${CFG.minYield}%, min score ${CFG.minScore}
+SCORING WEIGHTS: yield ${CFG.weights.y}%, consistency ${CFG.weights.c}%, payout ${CFG.weights.p}%, P/E ${CFG.weights.pe}%
+
+UPCOMING DIVIDENDS (next 8):
+${upcomingDivs.join('\n')}
+
+ACTIVE ALERTS: ${alerts.length}
+
+Keep responses focused and under 250 words unless a detailed breakdown is asked for. Answers should be practical and actionable for a Kenyan retail investor trading manually via a CMA-licensed broker.`;
+}
+
+function updateAiContextCards() {
+  // Portfolio card
+  const portEl = document.getElementById('ai-port-summary');
+  const countEl = document.getElementById('ai-port-count');
+  if (!portfolio.length) {
+    portEl.textContent = 'No holdings yet — add stocks in the Portfolio tab.';
+    countEl.textContent = '0 holdings';
+  } else {
+    const totalBook = portfolio.reduce((s, h) => s + h.shares * h.buyPrice, 0);
+    const totalMkt = portfolio.reduce((s, h) => {
+      const lp = livePrices[h.ticker] || (STOCKS.find(x => x.ticker === h.ticker)||{}).price || 0;
+      return s + h.shares * lp;
+    }, 0);
+    const pnlPct = totalBook ? ((totalMkt - totalBook) / totalBook * 100).toFixed(1) : 0;
+    const sectors = [...new Set(portfolio.map(h => (STOCKS.find(x => x.ticker === h.ticker)||{}).sector).filter(Boolean))];
+    portEl.textContent = `Book: KES ${Math.round(totalBook).toLocaleString()} · Mkt: ~KES ${Math.round(totalMkt).toLocaleString()} · P&L: ${pnlPct >= 0 ? '+' : ''}${pnlPct}%\nSectors: ${sectors.join(', ') || '—'} · Watchlist: ${watchlist.length} stocks`;
+    countEl.textContent = portfolio.length + ' holding' + (portfolio.length !== 1 ? 's' : '');
+  }
+
+  // Market snapshot card
+  const scored = STOCKS.map(s => {
+    const yS = Math.min(s.yield/15*100,100)*(CFG.weights.y/100);
+    const cS = Math.min(s.cons/15*100,100)*(CFG.weights.c/100);
+    const pS = s.payout>0&&s.payout<80?(1-Math.abs(s.payout-50)/50)*100*(CFG.weights.p/100):0;
+    const peS = s.pe>0?Math.max(0,(1-(s.pe-5)/25))*100*(CFG.weights.pe/100):0;
+    return {...s, score:Math.round(yS+cS+pS+peS)};
+  });
+  const buys = scored.filter(s => s.score >= CFG.minScore && s.yield >= CFG.minYield);
+  const avgYield = (STOCKS.filter(s=>s.yield>0).reduce((s,x)=>s+x.yield,0)/STOCKS.filter(s=>s.yield>0).length).toFixed(1);
+  const topPick = scored.sort((a,b)=>b.score-a.score)[0];
+  const nextDiv = DIVIDENDS.filter(d=>new Date(d.exDate)>=new Date()).sort((a,b)=>new Date(a.exDate)-new Date(b.exDate))[0];
+  document.getElementById('ai-market-summary').textContent =
+    `${buys.length} buy signals · ${STOCKS.filter(s=>s.yield>0).length} dividend-paying stocks\nAvg yield: ${avgYield}% · Top pick: ${topPick?.ticker} (score ${topPick?.score})\nNext dividend: ${nextDiv?.ticker} KES ${nextDiv?.amount} ex ${nextDiv?.exDate}`;
+}
+
+function appendAiMessage(role, text, isThinking) {
+  const msgs = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg' + (role === 'user' ? ' user' : '');
+  div.innerHTML = `
+    <div class="ai-avatar ${role === 'user' ? 'usr' : 'bot'}">${role === 'user' ? 'You' : 'AI'}</div>
+    <div class="ai-bubble ${role === 'user' ? 'usr' : 'bot'}${isThinking ? ' thinking' : ''}">${text}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div.querySelector('.ai-bubble');
+}
+
+async function sendAiMessage() {
+  if (aiThinking) return;
+  const input = document.getElementById('ai-user-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  appendAiMessage('user', q);
+  aiHistory.push({ role: 'user', content: q });
+
+  aiThinking = true;
+  document.getElementById('ai-send-btn').disabled = true;
+  document.querySelectorAll('.ai-chip').forEach(c => c.disabled = true);
+
+  const thinkBubble = appendAiMessage('bot', 'Analysing…', true);
+
+  try {
+    const systemPrompt = buildAiContext();
+    const messages = aiHistory.slice(-10); // keep last 10 turns for context
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: messages
+      })
+    });
+
+    const data = await resp.json();
+    const reply = data.content?.find(b => b.type === 'text')?.text || 'No response received.';
+
+    thinkBubble.textContent = reply;
+    thinkBubble.classList.remove('thinking');
+    aiHistory.push({ role: 'assistant', content: reply });
+
+    // Keep history from growing too large
+    if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+
+  } catch(e) {
+    thinkBubble.textContent = 'Error reaching AI. Please check your connection and try again.';
+    thinkBubble.classList.remove('thinking');
+    aiHistory.pop(); // remove the failed user turn
+  } finally {
+    aiThinking = false;
+    document.getElementById('ai-send-btn').disabled = false;
+    renderAiChips();
+    document.getElementById('ai-messages').scrollTop = document.getElementById('ai-messages').scrollHeight;
+  }
+}
+
+// Patch switchTab to refresh AI context when AI tab opens
+const _origSwitchTabFn = window.switchTab;
+if (typeof switchTab === 'function') {
+  const _origFn = switchTab;
+  window.switchTab = function(name, el) {
+    _origFn(name, el);
+    if (name === 'ai') updateAiContextCards();
+  };
+}
+
+// ── INIT AI TAB ───────────────────────────────────────────────────
+renderAiChips();
+// updateAiContextCards will be called in the patched init
+
+initFirebase();
+populateStockSelects();
+initSettings();
+initBackendUrlUI();
+updateBackendBanner();
+renderTable();
+renderWatchlist();
+renderCalendar();
+renderPortfolio();
+renderAlerts();
+updateMarketMetrics();
+updateAiContextCards();
+loadBrokerSettings();
+updateClock();
+setInterval(updateClock,1000);
+setInterval(()=>{renderTable();renderAlerts();updateMarketMetrics();updateAiContextCards();},60000);
+
 function updateClock(){
   const now=new Date();
   const eat=new Date(now.toLocaleString('en-US',{timeZone:'Africa/Nairobi'}));
@@ -2122,20 +2885,5 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'),2400);
 }
 
-// ── INIT ──────────────────────────────────────────────────────────
-initFirebase();
-populateStockSelects();
-initSettings();
-initBackendUrlUI();
-updateBackendBanner();
-renderTable();
-renderWatchlist();
-renderCalendar();
-renderPortfolio();
-renderAlerts();
-updateMarketMetrics();  // initial static metrics on page load
-updateClock();
-setInterval(updateClock,1000);
-setInterval(()=>{renderTable();renderAlerts();updateMarketMetrics();},60000);
 </script>
 </body>
