@@ -721,19 +721,19 @@ body.light select, body.light .form-group select, body.light .form-group input {
         </div>
       </div>
       <div class="settings-section">
-        <h3>Anthropic API Key — Required for AI Analyst &amp; Signal Engine</h3>
+        <h3>Gemini API Key — AI Analyst &amp; Signal Engine</h3>
         <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
           <label style="color:var(--text2);font-size:13px;">
-            The AI Analyst chat and Signal Engine use the Claude AI API directly from your browser. Enter your key below — it is stored only in this browser.
-            <br><a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);font-size:11px;font-family:var(--mono);">Get a free key at console.anthropic.com ↗</a>
+            The AI Analyst chat and Signal Engine use Google Gemini. It's <strong style="color:var(--accent);">completely free</strong> — no credit card needed.
+            <br><a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);font-size:11px;font-family:var(--mono);">Get your free key at aistudio.google.com/apikey ↗</a>
           </label>
           <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap;">
-            <input type="password" id="anthropic-key-input" placeholder="sk-ant-api03-…"
+            <input type="password" id="gemini-key-input" placeholder="AIza…"
               style="flex:1;min-width:260px;padding:9px 12px;background:var(--navy);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;">
-            <button class="btn btn-accent" onclick="saveAnthropicKey()" style="padding:9px 18px;">Save Key</button>
-            <button class="btn" onclick="clearAnthropicKey()" style="padding:9px 14px;">Clear</button>
+            <button class="btn btn-accent" onclick="saveGeminiKey()" style="padding:9px 18px;">Save Key</button>
+            <button class="btn" onclick="clearGeminiKey()" style="padding:9px 14px;">Clear</button>
           </div>
-          <div id="anthropic-key-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
+          <div id="gemini-key-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
         </div>
       </div>
       <div class="settings-section">
@@ -1878,14 +1878,6 @@ function saveBackendUrl() {
     document.getElementById('backend-url-status').style.color = 'var(--accent)';
     document.getElementById('backend-url-status').textContent = '✓ Saved — click Refresh Prices to test';
     toast('✓ Backend URL saved');
-    // Hide the banner immediately now that a URL is configured
-    updateBackendBanner();
-    // Clear the screener error message if it was showing the "no backend" error
-    const liveStatus = document.getElementById('live-status');
-    if (liveStatus && liveStatus.textContent.includes('Backend not configured')) {
-      liveStatus.className = 'live-status';
-      liveStatus.textContent = '✓ Backend URL saved — click Refresh Prices to fetch live prices';
-    }
   } catch(e) {}
 }
 function initBackendUrlUI() {
@@ -1935,36 +1927,20 @@ async function fetchLivePrices() {
 
   try {
     const res = await fetch(`${backendUrl}/prices`, { signal: AbortSignal.timeout(30000) });
-    if (!res.ok) throw new Error(`Backend responded ${res.status} — check your Render URL is correct`);
+    if (!res.ok) throw new Error(`Backend responded ${res.status}`);
     const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Backend error');
 
-    // Support both { ok, data } and flat { TICKER: {...} } response shapes
-    let prices = {};
-    if (json.ok === true && json.data) {
-      prices = json.data;
-    } else if (json.ok === false) {
-      throw new Error(json.error || 'Backend returned an error');
-    } else if (typeof json === 'object' && !Array.isArray(json)) {
-      // Flat map — backend returned prices directly
-      prices = json;
-    }
-
+    const prices = json.data;
     const now    = new Date();
     let updated  = 0;
 
     for (const [ticker, info] of Object.entries(prices)) {
-      if (!info || typeof info !== 'object') continue;
-      const price = parseFloat(info.price ?? info);
-      if (isNaN(price) || price <= 0) continue;
-      livePrices[ticker] = {
-        price,
-        change: parseFloat(info.change ?? 0),
-        changePct: parseFloat(info.changePct ?? 0),
-        fetchedAt: now
-      };
+      if (!info || !info.price || isNaN(info.price) || info.price <= 0) continue;
+      livePrices[ticker] = { price: info.price, change: info.change ?? 0, changePct: info.changePct ?? 0, fetchedAt: now };
       const stock = STOCKS.find(s => s.ticker === ticker);
       if (stock) {
-        stock.price = price;
+        stock.price = info.price;
         const div = DIVIDENDS.find(d => d.ticker === ticker);
         if (div && stock.price > 0)
           stock.yield = parseFloat(((div.amount / stock.price) * 100).toFixed(1));
@@ -1981,14 +1957,14 @@ async function fetchLivePrices() {
       renderTable(); renderWatchlist(); renderPortfolio(); renderAlerts();
       toast(`✓ ${updated} live NSE prices loaded`);
     } else {
-      throw new Error('Backend returned no usable prices — the backend may still be starting up (wait 30s and retry)');
+      throw new Error('Backend returned no usable prices');
     }
 
   } catch(err) {
     console.error('fetchLivePrices:', err);
     statusEl.className   = 'live-status error';
     statusEl.textContent = `⚠ ${err.message}`;
-    toast('Price fetch failed — ' + err.message.slice(0, 60));
+    toast('Price fetch failed — check backend URL in Settings');
   } finally {
     isFetching   = false;
     btn.disabled = false;
@@ -2298,41 +2274,41 @@ async function sendPasswordReset() {
 
 
 
-// ── ANTHROPIC API KEY MANAGEMENT ─────────────────────────────────
-// Required for: AI Analyst chat + Signal Engine (Steps 2 & 3)
-// Get a free key at console.anthropic.com/settings/keys
-function getAnthropicKey() {
-  try { return localStorage.getItem('nse_anthropic_key') || ''; } catch(e) { return ''; }
+// ── GEMINI API KEY MANAGEMENT ─────────────────────────────────────
+// Used by: AI Analyst chat + Signal Engine (Steps 2 & 3)
+// Get a FREE key (no credit card) at: aistudio.google.com/apikey
+function getGeminiKey() {
+  try { return localStorage.getItem('nse_gemini_key') || ''; } catch(e) { return ''; }
 }
-function saveAnthropicKey() {
-  const val = (document.getElementById('anthropic-key-input')?.value || '').trim();
-  if (!val.startsWith('sk-ant-')) {
-    document.getElementById('anthropic-key-status').style.color = 'var(--red)';
-    document.getElementById('anthropic-key-status').textContent = "⚠ Key should start with sk-ant- — paste your key from console.anthropic.com";
+function saveGeminiKey() {
+  const val = (document.getElementById('gemini-key-input')?.value || '').trim();
+  if (!val || val.length < 10) {
+    document.getElementById('gemini-key-status').style.color = 'var(--red)';
+    document.getElementById('gemini-key-status').textContent = '⚠ Key looks too short — paste your full key from aistudio.google.com/apikey';
     return;
   }
   try {
-    localStorage.setItem('nse_anthropic_key', val);
-    document.getElementById('anthropic-key-input').value = val.slice(0, 12) + '…' + val.slice(-4);
-    document.getElementById('anthropic-key-status').style.color = 'var(--accent)';
-    document.getElementById('anthropic-key-status').textContent = '✓ Key saved — AI Analyst and Signal Engine now active';
-    toast('✓ Anthropic key saved — AI features enabled');
+    localStorage.setItem('nse_gemini_key', val);
+    document.getElementById('gemini-key-input').value = val.slice(0, 6) + '…' + val.slice(-4);
+    document.getElementById('gemini-key-status').style.color = 'var(--accent)';
+    document.getElementById('gemini-key-status').textContent = '✓ Gemini key saved — AI Analyst and Signal Engine are now active';
+    toast('✓ Gemini key saved — AI features enabled');
   } catch(e) {
-    document.getElementById('anthropic-key-status').textContent = 'Could not save: ' + e.message;
+    document.getElementById('gemini-key-status').textContent = 'Could not save: ' + e.message;
   }
 }
-function clearAnthropicKey() {
-  try { localStorage.removeItem('nse_anthropic_key'); } catch(e) {}
-  document.getElementById('anthropic-key-input').value = '';
-  document.getElementById('anthropic-key-status').style.color = 'var(--muted)';
-  document.getElementById('anthropic-key-status').textContent = 'Key cleared.';
+function clearGeminiKey() {
+  try { localStorage.removeItem('nse_gemini_key'); } catch(e) {}
+  document.getElementById('gemini-key-input').value = '';
+  document.getElementById('gemini-key-status').style.color = 'var(--muted)';
+  document.getElementById('gemini-key-status').textContent = 'Key cleared.';
 }
-function initAnthropicKeyUI() {
-  const key = getAnthropicKey();
+function initGeminiKeyUI() {
+  const key = getGeminiKey();
   if (!key) return;
-  const input = document.getElementById('anthropic-key-input');
-  const status = document.getElementById('anthropic-key-status');
-  if (input) input.value = key.slice(0, 12) + '…' + key.slice(-4);
+  const input  = document.getElementById('gemini-key-input');
+  const status = document.getElementById('gemini-key-status');
+  if (input)  input.value = key.slice(0, 6) + '…' + key.slice(-4);
   if (status) {
     status.style.color = 'var(--accent)';
     status.textContent = '✓ Key loaded — AI Analyst and Signal Engine ready';
@@ -2442,46 +2418,45 @@ async function runSignalEngine() {
 
     await new Promise(r => setTimeout(r, 400));
 
-    // Step 2 — fetch & summarise market news via AI + web search
+    // Step 2 — fetch & summarise market news via Gemini + Google Search grounding
     statusEl.textContent = 'Step 2/3 — Scanning NSE market news…';
     let newsSummary = 'No recent news retrieved.';
-    const anthropicKey = getAnthropicKey();
-    if (!anthropicKey) {
-      statusEl.textContent = 'Step 2/3 — No Anthropic key set (skipping news scan)';
+    const geminiKey = getGeminiKey();
+    if (!geminiKey) {
+      statusEl.textContent = 'Step 2/3 — No Gemini key set (skipping news scan)';
     } else {
-    try {
-      const newsRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-          system: 'You are an NSE market analyst. Search for the latest NSE Kenya stock market news from today. Return a concise plain-text summary (max 300 words) covering: key movers, sector trends, any earnings announcements, macroeconomic news affecting the NSE, and any dividend announcements. Mention specific tickers where relevant. Plain text only, no markdown.',
-          messages: [{ role: 'user', content: 'Search for latest NSE Kenya stock market news today and summarise key developments affecting stock signals.' }]
-        })
-      });
-      const newsData = await newsRes.json();
-      if (newsData.error) throw new Error(newsData.error.message);
-      newsSummary = newsData.content?.find(b => b.type === 'text')?.text || newsSummary;
-      statusEl.textContent = 'Step 2/3 — ✓ Market news scanned';
-    } catch(e) {
-      statusEl.textContent = 'Step 2/3 — News scan failed, proceeding with fundamentals only';
-    }
+      try {
+        const newsRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: 'Search for the latest NSE Kenya stock market news today and summarise key developments. Cover: key movers, sector trends, earnings announcements, macroeconomic news affecting NSE, and dividend announcements. Mention specific tickers (e.g. SCOM, KCB, EQTY) where relevant. Plain text only, no markdown, max 300 words.' }]
+              }],
+              tools: [{ googleSearch: {} }],
+              generationConfig: { maxOutputTokens: 600, temperature: 0.2 }
+            })
+          }
+        );
+        const newsData = await newsRes.json();
+        if (newsData.error) throw new Error(newsData.error.message);
+        newsSummary = newsData.candidates?.[0]?.content?.parts?.[0]?.text || newsSummary;
+        statusEl.textContent = 'Step 2/3 — ✓ Market news scanned';
+      } catch(e) {
+        console.warn('News scan failed:', e.message);
+        statusEl.textContent = 'Step 2/3 — News scan failed, proceeding with fundamentals only';
+      }
     }
 
     await new Promise(r => setTimeout(r, 400));
 
-    // Step 3 — AI analyses all scored stocks + news → ranked signal list
+    // Step 3 — Gemini analyses all scored stocks + news → ranked signal list
     statusEl.textContent = 'Step 3/3 — AI analysing signals…';
 
-    if (!anthropicKey) {
-      throw new Error('No Anthropic API key — add your key in Settings → Anthropic API Key to run the Signal Engine');
+    if (!geminiKey) {
+      throw new Error('No Gemini API key set — add your free key in Settings → Gemini API Key');
     }
 
     const allScored = scored().sort((a, b) => b.score - a.score);
@@ -2512,7 +2487,7 @@ TASK: Return ONLY valid JSON — an array of signal objects, no other text, no m
 
 Each object must have:
 - ticker: string
-- name: string  
+- name: string
 - sector: string
 - price: number (KES)
 - signal: "BUY" | "WATCH" | "AVOID"
@@ -2540,29 +2515,29 @@ ${newsSummary}
 
 Return ONLY the JSON array. No preamble.`;
 
-    const engineRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: enginePrompt }]
-      })
-    });
+    const engineRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: enginePrompt }] }],
+          generationConfig: { maxOutputTokens: 2000, temperature: 0.3 }
+        })
+      }
+    );
 
     if (!engineRes.ok) {
       const errData = await engineRes.json().catch(() => ({}));
-      if (engineRes.status === 401) throw new Error('Invalid Anthropic API key — check your key in Settings');
-      throw new Error(`AI API error ${engineRes.status}: ${errData?.error?.message || engineRes.statusText}`);
+      if (engineRes.status === 400) throw new Error('Invalid Gemini key — check your key in Settings');
+      if (engineRes.status === 429) throw new Error('Gemini rate limit reached — wait a moment and try again');
+      throw new Error(`Gemini API error ${engineRes.status}: ${errData?.error?.message || engineRes.statusText}`);
     }
 
     const engineData = await engineRes.json();
-    const rawText = engineData.content?.find(b => b.type === 'text')?.text || '[]';
+    if (engineData.error) throw new Error(`Gemini: ${engineData.error.message}`);
+
+    const rawText = engineData.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
     let signals = [];
     try {
       const clean = rawText.replace(/```json|```/g, '').trim();
@@ -2898,9 +2873,9 @@ async function sendAiMessage() {
   if (!q) return;
   input.value = '';
 
-  const anthropicKey = getAnthropicKey();
-  if (!anthropicKey) {
-    appendAiMessage('bot', '⚠ No Anthropic API key set. Go to Settings → Anthropic API Key, paste your free key from console.anthropic.com, and save it. Then try again.');
+  const geminiKey = getGeminiKey();
+  if (!geminiKey) {
+    appendAiMessage('bot', '⚠ No Gemini API key set. Go to Settings → Gemini API Key, paste your free key from aistudio.google.com/apikey, and save it. Then try again.');
     return;
   }
 
@@ -2915,37 +2890,73 @@ async function sendAiMessage() {
 
   try {
     const systemPrompt = buildAiContext();
-    const messages = aiHistory.slice(-10);
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: messages
-      })
+    // Gemini uses a different message format — system prompt goes as first user turn
+    // then we interleave user/model turns from history
+    const geminiContents = [];
+
+    // Inject system context as the opening user message
+    geminiContents.push({
+      role: 'user',
+      parts: [{ text: systemPrompt + '\n\n---\n\nUser question: ' + q }]
     });
+
+    // If there's prior history, build a conversation (skip the current question already added)
+    if (aiHistory.length > 2) {
+      // Rebuild properly: system+first_question, model_reply, user, model, ...
+      const hist = aiHistory.slice(-12, -1); // last turns excluding current question
+      const rebuilt = [];
+      rebuilt.push({
+        role: 'user',
+        parts: [{ text: systemPrompt + '\n\n---\n\nUser question: ' + (hist[0]?.content || q) }]
+      });
+      for (let i = 1; i < hist.length; i++) {
+        rebuilt.push({
+          role: hist[i].role === 'user' ? 'user' : 'model',
+          parts: [{ text: hist[i].content }]
+        });
+      }
+      rebuilt.push({
+        role: 'user',
+        parts: [{ text: q }]
+      });
+      geminiContents.splice(0, geminiContents.length, ...rebuilt);
+    }
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: geminiContents,
+          generationConfig: { maxOutputTokens: 1200, temperature: 0.4 }
+        })
+      }
+    );
 
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({}));
-      if (resp.status === 401) throw new Error('Invalid API key — check your key in Settings');
+      if (resp.status === 400) throw new Error('Invalid Gemini API key — check your key in Settings');
       if (resp.status === 429) throw new Error('Rate limited — wait a moment and try again');
-      throw new Error(`API error ${resp.status}: ${errData?.error?.message || resp.statusText}`);
+      throw new Error(`Gemini API error ${resp.status}: ${errData?.error?.message || resp.statusText}`);
     }
 
     const data = await resp.json();
-    const reply = data.content?.find(b => b.type === 'text')?.text || 'No response received.';
+    if (data.error) throw new Error(`Gemini: ${data.error.message}`);
 
-    thinkBubble.textContent = reply;
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+
+    // Clean up any markdown formatting Gemini adds
+    const cleanReply = reply
+      .replace(/\*\*(.*?)\*\*/g, '$1')  // remove bold
+      .replace(/^#{1,3}\s/gm, '')        // remove headings
+      .replace(/^\*\s/gm, '• ')          // convert * bullets to •
+      .trim();
+
+    thinkBubble.textContent = cleanReply;
     thinkBubble.classList.remove('thinking');
-    aiHistory.push({ role: 'assistant', content: reply });
+    aiHistory.push({ role: 'assistant', content: cleanReply });
 
     if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
 
@@ -2979,7 +2990,7 @@ initFirebase();
 populateStockSelects();
 initSettings();
 initBackendUrlUI();
-initAnthropicKeyUI();
+initGeminiKeyUI();
 updateBackendBanner();
 renderTable();
 renderWatchlist();
